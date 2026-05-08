@@ -94,16 +94,18 @@ SCENARIOS.forEach((s, i) => {
 
 let currentScenario = null;
 let currentParams = {};
+let currentEmployee = {};
 
 function selectScenario(idx) {
   currentScenario = SCENARIOS[idx];
   currentParams = { ...currentScenario.program.params };
+  currentEmployee = { ...currentScenario.employee };
   document.querySelectorAll(".scenario-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
   render();
 }
 
 function buildFacts(scenario, month, year, accumulated) {
-  const emp = scenario.employee;
+  const emp = currentEmployee;
   const hireDate = emp.hire_date;
   const periodStart = `${year}-${String(month).padStart(2,"0")}-01`;
   const lastDay = new Date(year, month, 0).getDate();
@@ -218,18 +220,17 @@ function render() {
     <div class="card">
       <h2>${s.title}</h2>
       <p class="desc">${s.description}</p>
-      <div class="employee-info">
-        <div><span>Employee:</span> <strong>${s.employee.name}</strong></div>
-        <div><span>Hired:</span> <strong>${s.employee.hire_date}</strong></div>
-        ${s.employee.termination_date ? `<div><span>Terminated:</span> <strong>${s.employee.termination_date}</strong></div>` : ''}
-        <div><span>Country:</span> <strong>${s.employee.country}</strong></div>
-      </div>
     </div>
 
     ${s.needsBalanceRule ? `<div class="balance-note">⚠️ This pain requires <strong>balance_rule</strong> (cross-period state). The runtime injects <code>accumulated_balance</code> as a fact each period. Type: <strong>${s.balanceRule.type}</strong>${s.balanceRule.cap ? `, cap: ${s.balanceRule.cap}` : ''}${s.balanceRule.window_months ? `, window: ${s.balanceRule.window_months} months` : ''}</div>` : ''}
 
     <div class="card">
-      <h3>Parameters <span style="font-size:0.8em;color:var(--muted)">(edit to re-evaluate)</span></h3>
+      <h3>Employee <span style="font-size:0.8em;color:var(--muted)">(edit to re-evaluate)</span></h3>
+      <div class="params-grid" id="employee-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3>AST Parameters <span style="font-size:0.8em;color:var(--muted)">(edit to re-evaluate)</span></h3>
       <div class="params-grid" id="params-grid"></div>
     </div>
 
@@ -251,7 +252,47 @@ function render() {
     </div>
   `;
 
-  // Params editor
+  // Employee editor
+  const employeeGrid = document.getElementById("employee-grid");
+  const editableFields = {
+    hire_date: { label: "Hire date", type: "date" },
+    termination_date: { label: "Termination date", type: "date" },
+    weekly_hours: { label: "Weekly hours", type: "number" },
+    fte_ratio: { label: "FTE ratio", type: "number" },
+    days_per_week: { label: "Days/week", type: "number" },
+    sick_months: { label: "Sick months (comma-sep)", type: "text" },
+  };
+
+  Object.entries(editableFields).forEach(([key, cfg]) => {
+    const val = currentEmployee[key];
+    if (val === undefined && key !== "termination_date" && key !== "hire_date") return;
+    if (key === "termination_date" && !val) {} // show empty — user can add one
+
+    const div = document.createElement("div");
+    div.className = "param-field";
+    const displayVal = key === "sick_months" ? (val || []).join(",") : (val || "");
+    const inputType = cfg.type === "date" ? "date" : (cfg.type === "number" ? "number" : "text");
+    div.innerHTML = `<label>${cfg.label}</label><input type="${inputType}" ${cfg.type === "number" ? 'step="any"' : ''} value="${displayVal}" data-key="${key}">`;
+    div.querySelector("input").addEventListener("input", (e) => {
+      if (key === "sick_months") {
+        currentEmployee[key] = e.target.value.split(",").map(Number).filter(n => n > 0);
+      } else if (cfg.type === "number") {
+        currentEmployee[key] = parseFloat(e.target.value) || 0;
+      } else {
+        currentEmployee[key] = e.target.value || null;
+      }
+      renderResults();
+    });
+    employeeGrid.appendChild(div);
+  });
+
+  // Also show name + country as non-editable context
+  const infoDiv = document.createElement("div");
+  infoDiv.className = "param-field";
+  infoDiv.innerHTML = `<label>Name / Country</label><input type="text" value="${currentEmployee.name} (${currentEmployee.country})" disabled style="opacity:0.6">`;
+  employeeGrid.prepend(infoDiv);
+
+  // AST Params editor
   const paramsGrid = document.getElementById("params-grid");
   Object.entries(currentParams).forEach(([key, val]) => {
     const div = document.createElement("div");
