@@ -1,9 +1,9 @@
 {
-  "title": "Pain #3 — Contract change 40h→20h mid-year: auto pro-rata",
+  "title": "Pain #6 — Accrual per days worked: 3-day PT = 60% of 23 days",
   "program": {
     "params": {
-      "statutory_annual_days": 26,
-      "full_time_hours": 40
+      "annual_days": 23,
+      "full_time_days_per_week": 5
     },
     "rule": {
       "type": "accrue",
@@ -14,12 +14,12 @@
             "type": "div",
             "operands": [
               {
-                "type": "param",
-                "name": "statutory_annual_days"
+                "type": "ref",
+                "path": "facts.contract.days_per_week"
               },
               {
-                "type": "const",
-                "value": 12
+                "type": "param",
+                "name": "full_time_days_per_week"
               }
             ]
           },
@@ -27,12 +27,12 @@
             "type": "div",
             "operands": [
               {
-                "type": "ref",
-                "path": "facts.contract.weekly_hours"
+                "type": "param",
+                "name": "annual_days"
               },
               {
-                "type": "param",
-                "name": "full_time_hours"
+                "type": "const",
+                "value": 12
               }
             ]
           }
@@ -41,15 +41,15 @@
     }
   },
   "scenario": {
-    "label": "Sophie Laurent",
+    "label": "Emma Weber",
     "range": [
       "2026-01",
       "2026-12"
     ],
     "facts": {
-      "hire_date": "2021-01-15",
-      "country": "FR",
-      "children_count": 1,
+      "hire_date": "2023-01-01",
+      "country": "DE",
+      "children_count": 0,
       "gender": "female"
     },
     "by_month": {

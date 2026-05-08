@@ -1,0 +1,39 @@
+{
+  "title": "Pain #9 — Part-time: proportional accrual at 60% FTE",
+  "program": {
+    "params": {
+      "full_time_monthly": 2.5
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "mul",
+        "operands": [
+          {
+            "type": "param",
+            "name": "full_time_monthly"
+          },
+          {
+            "type": "ref",
+            "path": "facts.contract.fte_ratio"
+          }
+        ]
+      }
+    }
+  },
+  "scenario": {
+    "label": "Clara Hofmann",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2022-01-01",
+      "country": "DE",
+      "children_count": 0,
+      "gender": "female"
+    },
+    "by_month": {
+    }
+  }
+}

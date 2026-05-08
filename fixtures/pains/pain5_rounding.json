@@ -1,5 +1,5 @@
 {
-  "title": "Pain #5 — Spain: Half-day rounding",
+  "title": "Pain #5 — Spain: Standard mathematical rounding to full days",
   "program": {
     "params": {
       "monthly_base": 1.833
@@ -13,7 +13,7 @@
           "name": "monthly_base"
         },
         "mode": "nearest",
-        "step": 0.5
+        "step": 1
       }
     }
   },

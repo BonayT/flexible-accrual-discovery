@@ -1,9 +1,8 @@
 {
-  "title": "Pain #1 — Italy: H2 hire gets reduced first-year accrual",
+  "title": "Pain #1 — Italy: Hire date after 15th = 0 accrual for hire month",
   "program": {
     "params": {
-      "full_monthly": 2.1667,
-      "reduced_monthly": 1.333
+      "monthly_base": 2.1667
     },
     "rule": {
       "type": "accrue",
@@ -13,48 +12,48 @@
           "type": "and",
           "operands": [
             {
-              "type": "lt",
+              "type": "eq",
               "left": {
                 "type": "ref",
-                "path": "facts.tenure_years_at_period_start"
+                "path": "facts.hire_date.year_month"
               },
               "right": {
-                "type": "const",
-                "value": 1
+                "type": "ref",
+                "path": "period.year_month"
               }
             },
             {
               "type": "gt",
               "left": {
                 "type": "ref",
-                "path": "facts.hire_date.month"
+                "path": "facts.hire_date.day"
               },
               "right": {
                 "type": "const",
-                "value": 6
+                "value": 15
               }
             }
           ]
         },
         "then": {
-          "type": "param",
-          "name": "reduced_monthly"
+          "type": "const",
+          "value": 0
         },
         "else": {
           "type": "param",
-          "name": "full_monthly"
+          "name": "monthly_base"
         }
       }
     }
   },
   "scenario": {
-    "label": "Marco Rossi",
+    "label": "Luca Verdi",
     "range": [
       "2026-01",
       "2026-12"
     ],
     "facts": {
-      "hire_date": "2025-09-01",
+      "hire_date": "2026-03-20",
       "country": "IT",
       "children_count": 0,
       "gender": "male"

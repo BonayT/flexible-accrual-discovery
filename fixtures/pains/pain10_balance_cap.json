@@ -1,0 +1,62 @@
+{
+  "title": "Pain #10 — Overtime balance cap at 40h: stops accruing when reached",
+  "program": {
+    "balance_rule": {
+      "type": "capped",
+      "cap": 40
+    },
+    "params": {
+      "monthly_overtime_accrual": 5
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "min",
+        "operands": [
+          {
+            "type": "param",
+            "name": "monthly_overtime_accrual"
+          },
+          {
+            "type": "max",
+            "operands": [
+              {
+                "type": "const",
+                "value": 0
+              },
+              {
+                "type": "sub",
+                "operands": [
+                  {
+                    "type": "const",
+                    "value": 40
+                  },
+                  {
+                    "type": "ref",
+                    "path": "facts.accumulated_balance"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "scenario": {
+    "label": "Martin Berger",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2020-01-01",
+      "country": "DE",
+      "children_count": 0,
+      "gender": "male"
+    },
+    "by_month": {
+    }
+  },
+  "note": "balance_rule.capped: runtime injects accumulated_balance, AST self-limits"
+}

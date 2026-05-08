@@ -33,8 +33,9 @@ module TestHelpers
 
   # Evaluate an AST program for each month in a year, using the fact builder.
   # Returns an array of 12 BigDecimal results.
-  def evaluate_year(program:, employee:, contracts:, leaves:, year: 2026)
+  def evaluate_year(program:, employee:, contracts:, leaves:, year: 2026, cycle: nil)
     fact_builder = Factorial::AccrualFactBuilder.new
+    cycle ||= { start: Date.new(year, 1, 1), end: Date.new(year, 12, 31) }
 
     (1..12).map do |month|
       period = build_period(year, month)
@@ -42,7 +43,8 @@ module TestHelpers
         employee: employee,
         contracts: contracts,
         leaves: leaves,
-        period: period
+        period: period,
+        cycle: cycle
       )
       AccrualPoc::EvaluatorRuby.evaluate(program, facts, period)
     end

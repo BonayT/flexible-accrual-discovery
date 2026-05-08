@@ -1,8 +1,9 @@
 {
-  "title": "Pain #4 — France: Sick leave reduces vacation accrual",
+  "title": "Pain #4 — France: Sick leave reduces accrual to 80% rate",
   "program": {
     "params": {
-      "monthly_base": 2.0833
+      "full_rate": 2.5,
+      "sick_rate": 2.0
     },
     "rule": {
       "type": "accrue",
@@ -28,12 +29,12 @@
           }
         },
         "then": {
-          "type": "const",
-          "value": 0
+          "type": "param",
+          "name": "sick_rate"
         },
         "else": {
           "type": "param",
-          "name": "monthly_base"
+          "name": "full_rate"
         }
       }
     }

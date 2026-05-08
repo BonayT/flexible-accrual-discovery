@@ -1,0 +1,78 @@
+{
+  "title": "Pain #7 — Italy: 5-year tenure milestone grants extra accrual from June",
+  "program": {
+    "params": {
+      "base_monthly": 2.1667
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "add",
+        "operands": [
+          {
+            "type": "param",
+            "name": "base_monthly"
+          },
+          {
+            "type": "case",
+            "branches": [
+              {
+                "when": {
+                  "type": "gte",
+                  "left": {
+                    "type": "ref",
+                    "path": "facts.tenure_years_at_period_end"
+                  },
+                  "right": {
+                    "type": "const",
+                    "value": 10
+                  }
+                },
+                "then": {
+                  "type": "const",
+                  "value": 0.333
+                }
+              },
+              {
+                "when": {
+                  "type": "gte",
+                  "left": {
+                    "type": "ref",
+                    "path": "facts.tenure_years_at_period_end"
+                  },
+                  "right": {
+                    "type": "const",
+                    "value": 5
+                  }
+                },
+                "then": {
+                  "type": "const",
+                  "value": 0.167
+                }
+              }
+            ],
+            "else": {
+              "type": "const",
+              "value": 0
+            }
+          }
+        ]
+      }
+    }
+  },
+  "scenario": {
+    "label": "Giuseppe Marino",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2021-06-15",
+      "country": "IT",
+      "children_count": 0,
+      "gender": "male"
+    },
+    "by_month": {
+    }
+  }
+}

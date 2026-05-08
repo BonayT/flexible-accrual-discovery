@@ -1,8 +1,8 @@
 {
-  "title": "Pain #2 — DACH: Part-time hourly accrual (50% FTE)",
+  "title": "Pain #2 — DACH: Hours-based proportional accrual (20h/40h)",
   "program": {
     "params": {
-      "monthly_base": 2.5
+      "statutory_annual_days": 30
     },
     "rule": {
       "type": "accrue",
@@ -10,12 +10,30 @@
         "type": "mul",
         "operands": [
           {
-            "type": "param",
-            "name": "monthly_base"
+            "type": "div",
+            "operands": [
+              {
+                "type": "ref",
+                "path": "facts.hours_worked_in_period"
+              },
+              {
+                "type": "ref",
+                "path": "facts.reference_period_hours"
+              }
+            ]
           },
           {
-            "type": "ref",
-            "path": "facts.contract.fte_ratio"
+            "type": "div",
+            "operands": [
+              {
+                "type": "param",
+                "name": "statutory_annual_days"
+              },
+              {
+                "type": "const",
+                "value": 12
+              }
+            ]
           }
         ]
       }

@@ -1,0 +1,35 @@
+{
+  "title": "Pain #8 — UK: Rolling 12-month sick day entitlement",
+  "program": {
+    "balance_rule": {
+      "type": "rolling",
+      "window_months": 12
+    },
+    "params": {
+      "monthly_entitlement": 2.333
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "param",
+        "name": "monthly_entitlement"
+      }
+    }
+  },
+  "scenario": {
+    "label": "James Wilson",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2022-01-01",
+      "country": "UK",
+      "children_count": 0,
+      "gender": "male"
+    },
+    "by_month": {
+    }
+  },
+  "note": "balance_rule managed by runtime, not AST evaluator"
+}
