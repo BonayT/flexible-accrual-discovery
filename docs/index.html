@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flexible Accrual — AST Playground</title>
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.5em; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 0.9em; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Sidebar */
+  .sidebar { display: flex; flex-direction: column; gap: 12px; }
+  .scenario-btn { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; text-align: left; cursor: pointer; color: var(--text); font-size: 0.82em; line-height: 1.3; transition: border-color 0.15s; }
+  .scenario-btn:hover { border-color: var(--accent); }
+  .scenario-btn.active { border-color: var(--accent); background: #1c2333; }
+  .scenario-btn .country { font-size: 0.78em; color: var(--muted); }
+  .scenario-btn .badge { display: inline-block; background: var(--yellow); color: #000; font-size: 0.7em; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 1.1em; margin-bottom: 8px; }
+  .card h3 { font-size: 0.95em; margin-bottom: 6px; color: var(--muted); }
+  .desc { color: var(--muted); font-size: 0.88em; margin-bottom: 12px; }
+
+  /* Params editor */
+  .params-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .param-field { display: flex; flex-direction: column; gap: 2px; }
+  .param-field label { font-size: 0.78em; color: var(--muted); }
+  .param-field input { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; color: var(--text); font-size: 0.9em; font-family: 'SF Mono', Monaco, monospace; }
+  .param-field input:focus { outline: none; border-color: var(--accent); }
+
+  /* Results table */
+  table { width: 100%; border-collapse: collapse; font-size: 0.88em; }
+  th { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 500; }
+  td { padding: 8px; border-bottom: 1px solid var(--border); }
+  td.num { text-align: right; font-family: 'SF Mono', Monaco, monospace; }
+  tr.zero td { color: var(--red); }
+  tr.reduced td { color: var(--yellow); }
+  .total-row td { border-top: 2px solid var(--accent); font-weight: 600; }
+
+  /* Bar chart */
+  .bar-chart { display: flex; align-items: flex-end; gap: 4px; height: 120px; margin-top: 8px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; border-radius: 3px 3px 0 0; background: var(--accent); min-height: 1px; transition: height 0.3s; }
+  .bar.zero { background: var(--red); }
+  .bar.reduced { background: var(--yellow); }
+  .bar-label { font-size: 0.65em; color: var(--muted); }
+  .bar-value { font-size: 0.65em; font-family: monospace; }
+
+  /* AST viewer */
+  pre { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 12px; font-size: 0.8em; overflow-x: auto; max-height: 300px; overflow-y: auto; line-height: 1.4; }
+
+  /* Employee info */
+  .employee-info { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.85em; }
+  .employee-info span { color: var(--muted); }
+  .employee-info strong { color: var(--text); }
+
+  .balance-note { background: #2d1b00; border: 1px solid var(--yellow); border-radius: 6px; padding: 10px 14px; font-size: 0.85em; color: var(--yellow); }
+</style>
+</head>
+<body>
+
+<h1>Flexible Accrual — AST Playground</h1>
+<p class="subtitle">Interactive validation of 10 customer pains using the AST evaluator. Edit params and see results in real time.</p>
+
+<div class="grid">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main" id="main">
+    <div class="card"><p style="color:var(--muted)">← Select a pain scenario to start</p></div>
+  </div>
+</div>
+
+<script type="module">
+import { evaluate } from './evaluator.js';
+import { SCENARIOS } from './scenarios.js';
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// Build sidebar
+const sidebar = document.getElementById("sidebar");
+SCENARIOS.forEach((s, i) => {
+  const btn = document.createElement("button");
+  btn.className = "scenario-btn";
+  btn.innerHTML = `<div>${s.title}${s.needsBalanceRule ? '<span class="badge">balance_rule</span>' : ''}</div><div class="country">${s.country}</div>`;
+  btn.onclick = () => selectScenario(i);
+  sidebar.appendChild(btn);
+});
+
+let currentScenario = null;
+let currentParams = {};
+
+function selectScenario(idx) {
+  currentScenario = SCENARIOS[idx];
+  currentParams = { ...currentScenario.program.params };
+  document.querySelectorAll(".scenario-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
+  render();
+}
+
+function buildFacts(scenario, month, year, accumulated) {
+  const emp = scenario.employee;
+  const hireDate = emp.hire_date;
+  const periodStart = `${year}-${String(month).padStart(2,"0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const periodEnd = `${year}-${String(month).padStart(2,"0")}-${lastDay}`;
+
+  // Tenure
+  const hireDt = new Date(hireDate + "T00:00:00Z");
+  const refDt = new Date(periodEnd + "T00:00:00Z");
+  const tenureDays = (refDt - hireDt) / 86400000;
+  const tenureYears = tenureDays / 365.25;
+
+  const tenureStart = new Date(periodStart + "T00:00:00Z");
+  const tenureDaysStart = (tenureStart - hireDt) / 86400000;
+  const tenureYearsStart = tenureDaysStart / 365.25;
+
+  // Contract
+  let weeklyHours = emp.weekly_hours || 40;
+  let fteRatio = emp.fte_ratio || 1.0;
+  let daysPerWeek = emp.days_per_week || 5;
+
+  if (emp.contracts) {
+    const active = emp.contracts.filter(c => {
+      const cs = new Date(c.start + "T00:00:00Z");
+      const ce = c.end ? new Date(c.end + "T00:00:00Z") : new Date("2099-12-31");
+      return cs <= refDt && ce >= tenureStart;
+    }).sort((a, b) => a.start > b.start ? -1 : 1)[0];
+    if (active) { weeklyHours = active.weekly_hours; fteRatio = active.fte_ratio; }
+  }
+
+  const workingDays = 22;
+  const dailyHours = weeklyHours / daysPerWeek;
+  const hoursWorked = workingDays * dailyHours;
+  const refHours = workingDays * (40 / 5);
+
+  // Absences
+  const absences = [];
+  if (emp.sick_months && emp.sick_months.includes(month)) {
+    absences.push({ type: "sick_non_work_related", start: periodStart, end: periodEnd });
+  }
+
+  // Worked full month
+  let workedFullMonth = true;
+  if (hireDt > refDt) workedFullMonth = false;
+  if (emp.termination_date) {
+    const termDt = new Date(emp.termination_date + "T00:00:00Z");
+    if (termDt < tenureStart) workedFullMonth = false;
+  }
+
+  return {
+    hire_date: hireDate,
+    termination_date: emp.termination_date,
+    country: emp.country,
+    worked_full_month: workedFullMonth,
+    tenure_years_at_period_start: Math.max(0, tenureYearsStart),
+    tenure_years_at_period_end: Math.max(0, tenureYears),
+    contract: { weekly_hours: weeklyHours, days_per_week: daysPerWeek, is_part_time: fteRatio < 1, fte_ratio: fteRatio },
+    absences_in_period: absences,
+    hours_worked_in_period: hoursWorked,
+    reference_period_hours: refHours,
+    working_days_in_period: workingDays,
+    accumulated_balance: accumulated || 0,
+  };
+}
+
+function evaluateScenario(scenario, params) {
+  const program = { ...scenario.program, params };
+  const year = 2026;
+  const results = [];
+  let accumulated = 0;
+
+  for (let m = 1; m <= 12; m++) {
+    const facts = buildFacts(scenario, m, year, accumulated);
+    const period = {
+      year, month: m,
+      year_month: `${year}-${String(m).padStart(2,"0")}`,
+      start: `${year}-${String(m).padStart(2,"0")}-01`,
+      end: `${year}-${String(m).padStart(2,"0")}-${new Date(year, m, 0).getDate()}`,
+      working_days: 22
+    };
+
+    let accrued = evaluate(program, facts, period);
+
+    // Apply cap for balance_rule scenarios
+    if (scenario.needsBalanceRule && scenario.balanceRule?.type === "capped") {
+      const cap = scenario.balanceRule.cap;
+      accrued = Math.min(accrued, Math.max(0, cap - accumulated));
+    }
+
+    accumulated += accrued;
+    results.push({ month: MONTHS[m - 1], value: accrued, accumulated });
+  }
+  return results;
+}
+
+function render() {
+  const s = currentScenario;
+  const main = document.getElementById("main");
+
+  let results;
+  try {
+    results = evaluateScenario(s, currentParams);
+  } catch (e) {
+    main.innerHTML = `<div class="card"><h2>Error</h2><pre>${e.message}</pre></div>`;
+    return;
+  }
+
+  const total = results.reduce((a, r) => a + r.value, 0);
+  const maxVal = Math.max(...results.map(r => r.value), 0.01);
+  const baseVal = results.find(r => r.value > 0)?.value;
+
+  main.innerHTML = `
+    <div class="card">
+      <h2>${s.title}</h2>
+      <p class="desc">${s.description}</p>
+      <div class="employee-info">
+        <div><span>Employee:</span> <strong>${s.employee.name}</strong></div>
+        <div><span>Hired:</span> <strong>${s.employee.hire_date}</strong></div>
+        ${s.employee.termination_date ? `<div><span>Terminated:</span> <strong>${s.employee.termination_date}</strong></div>` : ''}
+        <div><span>Country:</span> <strong>${s.employee.country}</strong></div>
+      </div>
+    </div>
+
+    ${s.needsBalanceRule ? `<div class="balance-note">⚠️ This pain requires <strong>balance_rule</strong> (cross-period state). The runtime injects <code>accumulated_balance</code> as a fact each period. Type: <strong>${s.balanceRule.type}</strong>${s.balanceRule.cap ? `, cap: ${s.balanceRule.cap}` : ''}${s.balanceRule.window_months ? `, window: ${s.balanceRule.window_months} months` : ''}</div>` : ''}
+
+    <div class="card">
+      <h3>Parameters <span style="font-size:0.8em;color:var(--muted)">(edit to re-evaluate)</span></h3>
+      <div class="params-grid" id="params-grid"></div>
+    </div>
+
+    <div class="card">
+      <h3>Monthly Accrual — 2026</h3>
+      <div class="bar-chart" id="bar-chart"></div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Month</th><th style="text-align:right">Accrued</th><th style="text-align:right">Accumulated</th></tr></thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>AST Program</h3>
+      <pre>${JSON.stringify(s.program, null, 2)}</pre>
+    </div>
+  `;
+
+  // Params editor
+  const paramsGrid = document.getElementById("params-grid");
+  Object.entries(currentParams).forEach(([key, val]) => {
+    const div = document.createElement("div");
+    div.className = "param-field";
+    div.innerHTML = `<label>${key}</label><input type="number" step="any" value="${val}" data-key="${key}">`;
+    div.querySelector("input").addEventListener("input", (e) => {
+      currentParams[key] = parseFloat(e.target.value) || 0;
+      renderResults();
+    });
+    paramsGrid.appendChild(div);
+  });
+
+  renderResults();
+}
+
+function renderResults() {
+  const s = currentScenario;
+  let results;
+  try { results = evaluateScenario(s, currentParams); } catch(e) { return; }
+
+  const total = results.reduce((a, r) => a + r.value, 0);
+  const maxVal = Math.max(...results.map(r => r.value), 0.01);
+  const baseVal = results.find(r => r.value > 0)?.value || 0;
+
+  // Bar chart
+  const chart = document.getElementById("bar-chart");
+  if (chart) {
+    chart.innerHTML = results.map(r => {
+      const h = (r.value / maxVal) * 100;
+      const cls = r.value === 0 ? "zero" : (baseVal > 0 && r.value < baseVal && r.value > 0 ? "reduced" : "");
+      return `<div class="bar-col"><div class="bar-value">${round2(r.value)}</div><div class="bar ${cls}" style="height:${Math.max(h, 1)}%"></div><div class="bar-label">${r.month}</div></div>`;
+    }).join("");
+  }
+
+  // Table
+  const tbody = document.getElementById("results-body");
+  if (tbody) {
+    tbody.innerHTML = results.map(r => {
+      const cls = r.value === 0 ? "zero" : (baseVal > 0 && r.value < baseVal && r.value > 0 ? "reduced" : "");
+      return `<tr class="${cls}"><td>${r.month}</td><td class="num">${round4(r.value)}</td><td class="num">${round4(r.accumulated)}</td></tr>`;
+    }).join("") + `<tr class="total-row"><td>Total</td><td class="num">${round4(total)}</td><td class="num">—</td></tr>`;
+  }
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
+function round4(n) { return Math.round(n * 10000) / 10000; }
+
+// Auto-select first scenario
+selectScenario(0);
+</script>
+</body>
+</html>
