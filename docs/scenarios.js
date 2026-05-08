@@ -5,14 +5,18 @@ export const SCENARIOS = [
     id: "pain1_italy",
     title: "Pain #1 — Italy: Hire date after 15th = 0 accrual",
     country: "🇮🇹 Italy",
-    description: "If hired on/after 16th, accrue 0 for that month. Uses hire_date.day + year_month match.",
+    description: "Pre-hire months → 0. Hire month: if hired on/after 16th → 0, before 16th → full. Post-hire → full.",
     employee: { hire_date: "2026-03-20", termination_date: null, country: "IT", name: "Luca Verdi" },
     program: {
       params: { monthly_base: 2.1667 },
-      rule: { type: "accrue", amount: { type: "if", cond: { type: "and", operands: [
-        { type: "eq", left: { type: "ref", path: "facts.hire_date.year_month" }, right: { type: "ref", path: "period.year_month" } },
-        { type: "gt", left: { type: "ref", path: "facts.hire_date.day" }, right: { type: "const", value: 15 } }
-      ]}, then: { type: "const", value: 0 }, else: { type: "param", name: "monthly_base" } } }
+      rule: { type: "accrue", amount: { type: "case", branches: [
+        { when: { type: "lt", left: { type: "ref", path: "period.year_month" }, right: { type: "ref", path: "facts.hire_date.year_month" } },
+          then: { type: "const", value: 0 } },
+        { when: { type: "and", operands: [
+          { type: "eq", left: { type: "ref", path: "period.year_month" }, right: { type: "ref", path: "facts.hire_date.year_month" } },
+          { type: "gt", left: { type: "ref", path: "facts.hire_date.day" }, right: { type: "const", value: 15 } }
+        ]}, then: { type: "const", value: 0 } }
+      ], else: { type: "param", name: "monthly_base" } } }
     }
   },
   {

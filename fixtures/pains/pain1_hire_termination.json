@@ -7,38 +7,59 @@
     "rule": {
       "type": "accrue",
       "amount": {
-        "type": "if",
-        "cond": {
-          "type": "and",
-          "operands": [
-            {
-              "type": "eq",
+        "type": "case",
+        "branches": [
+          {
+            "when": {
+              "type": "lt",
               "left": {
-                "type": "ref",
-                "path": "facts.hire_date.year_month"
-              },
-              "right": {
                 "type": "ref",
                 "path": "period.year_month"
-              }
-            },
-            {
-              "type": "gt",
-              "left": {
-                "type": "ref",
-                "path": "facts.hire_date.day"
               },
               "right": {
-                "type": "const",
-                "value": 15
+                "type": "ref",
+                "path": "facts.hire_date.year_month"
               }
+            },
+            "then": {
+              "type": "const",
+              "value": 0
             }
-          ]
-        },
-        "then": {
-          "type": "const",
-          "value": 0
-        },
+          },
+          {
+            "when": {
+              "type": "and",
+              "operands": [
+                {
+                  "type": "eq",
+                  "left": {
+                    "type": "ref",
+                    "path": "period.year_month"
+                  },
+                  "right": {
+                    "type": "ref",
+                    "path": "facts.hire_date.year_month"
+                  }
+                },
+                {
+                  "type": "gt",
+                  "left": {
+                    "type": "ref",
+                    "path": "facts.hire_date.day"
+                  },
+                  "right": {
+                    "type": "const",
+                    "value": 15
+                  }
+                }
+              ]
+            },
+            "then": {
+              "type": "const",
+              "value": 0
+            }
+          }
+        ],
         "else": {
           "type": "param",
           "name": "monthly_base"

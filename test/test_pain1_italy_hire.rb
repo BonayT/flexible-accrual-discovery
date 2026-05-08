@@ -10,29 +10,42 @@ require_relative 'test_helper'
 class TestPain1HireTerminationDate < Minitest::Test
   include TestHelpers
 
-  # Italy program: hire_date.day <= 15 in the hire month → full accrual, else 0.
-  # For non-hire months, always accrue full.
-  # Uses: if period is hire month AND hire_date.day > 15 → 0, else base
+  # Italy program:
+  # - If period is before hire month → 0 (not yet employed)
+  # - If period is hire month AND hired after 15th → 0
+  # - Else → full monthly base
   PROGRAM_ITALY = {
     'params' => { 'monthly_base' => 2.1667 },
     'rule' => {
       'type' => 'accrue',
       'amount' => {
-        'type' => 'if',
-        'cond' => {
-          'type' => 'and',
-          'operands' => [
-            # Is this the hire month?
-            { 'type' => 'eq',
-              'left' => { 'type' => 'ref', 'path' => 'facts.hire_date.year_month' },
-              'right' => { 'type' => 'ref', 'path' => 'period.year_month' } },
-            # Hired after the 15th?
-            { 'type' => 'gt',
-              'left' => { 'type' => 'ref', 'path' => 'facts.hire_date.day' },
-              'right' => { 'type' => 'const', 'value' => 15 } }
-          ]
-        },
-        'then' => { 'type' => 'const', 'value' => 0 },
+        'type' => 'case',
+        'branches' => [
+          {
+            # Period before hire → 0
+            'when' => {
+              'type' => 'lt',
+              'left' => { 'type' => 'ref', 'path' => 'period.year_month' },
+              'right' => { 'type' => 'ref', 'path' => 'facts.hire_date.year_month' }
+            },
+            'then' => { 'type' => 'const', 'value' => 0 }
+          },
+          {
+            # Hire month + day > 15 → 0
+            'when' => {
+              'type' => 'and',
+              'operands' => [
+                { 'type' => 'eq',
+                  'left' => { 'type' => 'ref', 'path' => 'period.year_month' },
+                  'right' => { 'type' => 'ref', 'path' => 'facts.hire_date.year_month' } },
+                { 'type' => 'gt',
+                  'left' => { 'type' => 'ref', 'path' => 'facts.hire_date.day' },
+                  'right' => { 'type' => 'const', 'value' => 15 } }
+              ]
+            },
+            'then' => { 'type' => 'const', 'value' => 0 }
+          }
+        ],
         'else' => { 'type' => 'param', 'name' => 'monthly_base' }
       }
     }
@@ -84,11 +97,16 @@ class TestPain1HireTerminationDate < Minitest::Test
       year: 2026
     )
 
+    # Jan-Feb: before hire → 0
+    assert_equal BigDecimal('0'), results[0], 'Jan (pre-hire) should be 0'
+    assert_equal BigDecimal('0'), results[1], 'Feb (pre-hire) should be 0'
     # March (hire month, day=10 ≤ 15) → full accrual
     assert_equal BigDecimal('2.1667'), results[2], 'March should accrue full (hired on 10th)'
-    # Jan and Feb: before hire, but the AST only checks year_month match
-    # Since hire_date.year_month is 2026-03, Jan/Feb won't match → else branch → full
-    # This is correct because in production, the outer system wouldn't call evaluator for pre-hire months.
+    # April onwards → full
+    (3..11).each do |i|
+      assert_equal BigDecimal('2.1667'), results[i],
+                   "Month #{i + 1} should accrue full, got #{results[i].to_f}"
+    end
   end
 
   def test_italy_hired_after_15th_gets_zero_for_hire_month
@@ -100,10 +118,16 @@ class TestPain1HireTerminationDate < Minitest::Test
       year: 2026
     )
 
+    # Jan-Feb: before hire → 0
+    assert_equal BigDecimal('0'), results[0], 'Jan (pre-hire) should be 0'
+    assert_equal BigDecimal('0'), results[1], 'Feb (pre-hire) should be 0'
     # March (hire month, day=20 > 15) → 0
     assert_equal BigDecimal('0'), results[2], 'March should be 0 (hired on 20th)'
     # April onwards → full
-    assert_equal BigDecimal('2.1667'), results[3], 'April should be full'
+    (3..11).each do |i|
+      assert_equal BigDecimal('2.1667'), results[i],
+                   "Month #{i + 1} should be full, got #{results[i].to_f}"
+    end
   end
 
   def test_portugal_terminated_employee_zero_after_termination
