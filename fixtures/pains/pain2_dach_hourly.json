@@ -1,0 +1,39 @@
+{
+  "title": "Pain #2 — DACH: Part-time hourly accrual (50% FTE)",
+  "program": {
+    "params": {
+      "monthly_base": 2.5
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "mul",
+        "operands": [
+          {
+            "type": "param",
+            "name": "monthly_base"
+          },
+          {
+            "type": "ref",
+            "path": "facts.contract.fte_ratio"
+          }
+        ]
+      }
+    }
+  },
+  "scenario": {
+    "label": "Anna Müller",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2023-06-01",
+      "country": "DE",
+      "children_count": 2,
+      "gender": "female"
+    },
+    "by_month": {
+    }
+  }
+}

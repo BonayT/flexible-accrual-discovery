@@ -1,0 +1,74 @@
+{
+  "title": "Pain #4 — France: Sick leave reduces vacation accrual",
+  "program": {
+    "params": {
+      "monthly_base": 2.0833
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "if",
+        "cond": {
+          "type": "exists",
+          "in": {
+            "type": "ref",
+            "path": "facts.absences_in_period"
+          },
+          "binding": "absence",
+          "where": {
+            "type": "eq",
+            "left": {
+              "type": "ref",
+              "path": "absence.type"
+            },
+            "right": {
+              "type": "const",
+              "value": "sick_non_work_related"
+            }
+          }
+        },
+        "then": {
+          "type": "const",
+          "value": 0
+        },
+        "else": {
+          "type": "param",
+          "name": "monthly_base"
+        }
+      }
+    }
+  },
+  "scenario": {
+    "label": "Marie Dupont",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2020-03-15",
+      "country": "FR",
+      "children_count": 0,
+      "gender": "female"
+    },
+    "by_month": {
+      "2026-03": {
+        "absences_in_period": [
+          {
+            "type": "sick_non_work_related",
+            "start": "2026-03-05",
+            "end": "2026-04-20"
+          }
+        ]
+      },
+      "2026-04": {
+        "absences_in_period": [
+          {
+            "type": "sick_non_work_related",
+            "start": "2026-03-05",
+            "end": "2026-04-20"
+          }
+        ]
+      }
+    }
+  }
+}

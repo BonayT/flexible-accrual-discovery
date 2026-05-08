@@ -1,0 +1,65 @@
+{
+  "title": "Pain #1 — Italy: H2 hire gets reduced first-year accrual",
+  "program": {
+    "params": {
+      "full_monthly": 2.1667,
+      "reduced_monthly": 1.333
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "if",
+        "cond": {
+          "type": "and",
+          "operands": [
+            {
+              "type": "lt",
+              "left": {
+                "type": "ref",
+                "path": "facts.tenure_years_at_period_start"
+              },
+              "right": {
+                "type": "const",
+                "value": 1
+              }
+            },
+            {
+              "type": "gt",
+              "left": {
+                "type": "ref",
+                "path": "facts.hire_date.month"
+              },
+              "right": {
+                "type": "const",
+                "value": 6
+              }
+            }
+          ]
+        },
+        "then": {
+          "type": "param",
+          "name": "reduced_monthly"
+        },
+        "else": {
+          "type": "param",
+          "name": "full_monthly"
+        }
+      }
+    }
+  },
+  "scenario": {
+    "label": "Marco Rossi",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2025-09-01",
+      "country": "IT",
+      "children_count": 0,
+      "gender": "male"
+    },
+    "by_month": {
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "title": "Pain #5 — Spain: Half-day rounding",
+  "program": {
+    "params": {
+      "monthly_base": 1.833
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "round",
+        "value": {
+          "type": "param",
+          "name": "monthly_base"
+        },
+        "mode": "nearest",
+        "step": 0.5
+      }
+    }
+  },
+  "scenario": {
+    "label": "Carlos García",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2022-01-10",
+      "country": "ES",
+      "children_count": 1,
+      "gender": "male"
+    },
+    "by_month": {
+    }
+  }
+}

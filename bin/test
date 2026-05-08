@@ -1,0 +1,4 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+Dir.glob(File.join(__dir__, "..", "test", "**", "test_*.rb")).each { |f| require f }

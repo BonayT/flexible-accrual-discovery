@@ -1,0 +1,39 @@
+{
+  "title": "Pain #3 — Contract change: FT→PT mid-year",
+  "program": {
+    "params": {
+      "monthly_base": 2.1667
+    },
+    "rule": {
+      "type": "accrue",
+      "amount": {
+        "type": "mul",
+        "operands": [
+          {
+            "type": "param",
+            "name": "monthly_base"
+          },
+          {
+            "type": "ref",
+            "path": "facts.contract.fte_ratio"
+          }
+        ]
+      }
+    }
+  },
+  "scenario": {
+    "label": "Sophie Laurent",
+    "range": [
+      "2026-01",
+      "2026-12"
+    ],
+    "facts": {
+      "hire_date": "2021-01-15",
+      "country": "FR",
+      "children_count": 1,
+      "gender": "female"
+    },
+    "by_month": {
+    }
+  }
+}
