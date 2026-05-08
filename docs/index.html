@@ -247,8 +247,8 @@ function render() {
     </div>
 
     <div class="card">
-      <h3>AST Program</h3>
-      <pre>${JSON.stringify(s.program, null, 2)}</pre>
+      <h3>AST Program <span style="font-size:0.8em;color:var(--muted)">(live — reflects current params &amp; employee)</span></h3>
+      <pre id="ast-json"></pre>
     </div>
   `;
 
@@ -334,6 +334,13 @@ function renderResults() {
       const cls = r.value === 0 ? "zero" : (baseVal > 0 && r.value < baseVal && r.value > 0 ? "reduced" : "");
       return `<tr class="${cls}"><td>${r.month}</td><td class="num">${round4(r.value)}</td><td class="num">${round4(r.accumulated)}</td></tr>`;
     }).join("") + `<tr class="total-row"><td>Total</td><td class="num">${round4(total)}</td><td class="num">—</td></tr>`;
+  }
+
+  // AST JSON — live with current params + employee
+  const astPre = document.getElementById("ast-json");
+  if (astPre) {
+    const liveProgram = { ...s.program, params: currentParams };
+    astPre.textContent = JSON.stringify({ program: liveProgram, employee: currentEmployee }, null, 2);
   }
 }
 
