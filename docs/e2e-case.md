@@ -106,6 +106,29 @@ Monthly accrual changes mid-cycle.
 }
 ```
 
+### AST Tree (Mermaid)
+
+```mermaid
+graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| WFM["ref 'facts.worked_full_month' ⇒ true"]
+    IF -->|else| ZERO[const 0]
+    IF -->|then| ROUND[round half_up step=0.5]
+    ROUND -->|value| DIV[div]
+    DIV -->|op1| ADD[add]
+    DIV -->|op2| TWELVE[const 12]
+    ADD -->|op1| BASE["param 'base_days' ⇒ 23"]
+    ADD -->|op2| MIN[min]
+    MIN -->|op1| MUL[mul]
+    MIN -->|op2| MAX_BONUS["param 'max_tenure_bonus' ⇒ 3"]
+    MUL -->|op1| BONUS["param 'tenure_bonus_per_milestone' ⇒ 1"]
+    MUL -->|op2| TENURE_DIV[div]
+    TENURE_DIV -->|op1| TENURE["ref 'facts.tenure_years_at_period_end' ⇒ 5"]
+    TENURE_DIV -->|op2| MILESTONE["param 'tenure_milestone_years' ⇒ 5"]
+```
+
+**June evaluation (post-milestone):** `round(0.5, half_up, (23 + min(1×(5/5), 3)) / 12)` = `round(0.5, 24/12)` = **2.0**
+
 ### Facts (generic) needed per period
 
 | Fact | Source |
@@ -224,6 +247,38 @@ Monthly accrual changes mid-cycle.
 }
 ```
 
+### AST Tree (Mermaid)
+
+```mermaid
+graph TD
+    ROOT[accrue] -->|amount| IF1[if]
+    IF1 -->|cond| WFM["ref 'facts.worked_full_month' ⇒ true"]
+    IF1 -->|else| ZERO[const 0]
+    IF1 -->|then| IF2[if]
+    IF2 -->|cond| EXISTS["exists in 'facts.absences_in_period'"]
+    EXISTS -->|binding| ABS["absence"]
+    EXISTS -->|where| EQ[eq]
+    EQ -->|left| TYPE["ref 'absence.type'"]
+    EQ -->|right| SICK_CONST["const 'sick'"]
+    IF2 -->|then| MUL_SICK["mul (sick path)"]
+    MUL_SICK -->|op1| RATIO[div]
+    RATIO -->|op1| HW["ref 'facts.hours_worked_in_period' ⇒ 48"]
+    RATIO -->|op2| RH["ref 'facts.reference_period_hours' ⇒ 176"]
+    MUL_SICK -->|op2| MONTHLY[div]
+    MONTHLY -->|op1| BASE["param 'base_days' ⇒ 24"]
+    MONTHLY -->|op2| TWELVE[const 12]
+    MUL_SICK -->|op3| RATE["param 'sick_accrual_rate' ⇒ 0.8"]
+    IF2 -->|else| MUL_NORMAL["mul (normal path)"]
+    MUL_NORMAL -->|op1| FTE["ref 'facts.contract.fte_ratio' ⇒ 0.5"]
+    MUL_NORMAL -->|op2| MONTHLY2[div]
+    MONTHLY2 -->|op1| BASE2["param 'base_days' ⇒ 24"]
+    MONTHLY2 -->|op2| TWELVE2[const 12]
+```
+
+**March (sick, part-time):** `(48/176) × (24/12) × 0.8` = **~0.44**
+**Jan (normal, part-time):** `0.5 × (24/12)` = **1.0**
+**Jul (full-time):** `1.0 × (24/12)` = **2.0**
+
 ### Facts needed per period
 
 | Fact | Source | Type |
@@ -323,6 +378,34 @@ November and December each generate 5h overtime → cap should kick in at Decemb
 }
 ```
 
+### AST Tree (Mermaid)
+
+```mermaid
+graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| GT[gt]
+    GT -->|left| HW["ref 'facts.hours_worked_in_period' ⇒ 45"]
+    GT -->|right| RH["ref 'facts.reference_period_hours' ⇒ 40"]
+    IF -->|then| MUL[mul]
+    MUL -->|op1| SUB[sub]
+    SUB -->|op1| HW2["ref 'facts.hours_worked_in_period' ⇒ 45"]
+    SUB -->|op2| RH2["ref 'facts.reference_period_hours' ⇒ 40"]
+    MUL -->|op2| RATE["param 'overtime_conversion_rate' ⇒ 1.5"]
+    IF -->|else| ZERO[const 0]
+```
+
+**Nov raw result:** `(45-40) × 1.5` = **7.5** → BalanceEvaluator cap: `min(7.5, 40-35)` = **5.0**
+
+```mermaid
+graph TD
+    RUNTIME[BalanceEvaluator] -->|each period| EVAL[AST Evaluator]
+    EVAL -->|"raw = 7.5"| CAP{"accumulated + raw > cap?"}
+    CAP -->|yes| EFF["effective = cap - accumulated = 5.0"]
+    CAP -->|no| FULL["effective = raw"]
+    EFF --> LEDGER[Update bucket ledger]
+    FULL --> LEDGER
+```
+
 ### Balance runtime behavior
 
 > **Note**: The `balance_rule` key shown in the AST above is a simplified format
@@ -392,6 +475,31 @@ Let's simplify — no rounding for Case 4 to isolate the dimension effect:
 
 - Pedro (Coslada): `"base_days": 23` → 23/12 = 1.9166… per month → total ≈ 23.0
 - Ana (Valencia): `"base_days": 25` → 25/12 = 2.0833… per month → total ≈ 25.0
+
+### AST Tree (Mermaid) — same tree, different param injection
+
+```mermaid
+graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| WFM["ref 'facts.worked_full_month' ⇒ true"]
+    IF -->|else| ZERO[const 0]
+    IF -->|then| DIV[div]
+    DIV -->|op1| ADD[add]
+    DIV -->|op2| TWELVE[const 12]
+    ADD -->|op1| BASE["param 'base_days' ⇒ ?"]
+    ADD -->|op2| MIN[min]
+    MIN -->|op1| MUL[mul]
+    MIN -->|op2| MAX_B["param 'max_tenure_bonus' ⇒ 3"]
+    MUL -->|op1| BONUS["param 'tenure_bonus_per_milestone' ⇒ 1"]
+    MUL -->|op2| TDIV[div]
+    TDIV -->|op1| TENURE["ref 'facts.tenure_years_at_period_end' ⇒ 3"]
+    TDIV -->|op2| MILESTONE["param 'tenure_milestone_years' ⇒ 5"]
+
+    style BASE fill:#ff9,stroke:#333
+```
+
+**Pedro** (Coslada): `BASE` = 23 → `(23 + 0) / 12` = **1.916…/month → 23.0/year**
+**Ana** (Valencia): `BASE` = 25 → `(25 + 0) / 12` = **2.083…/month → 25.0/year**
 
 ### Key point for W2
 
