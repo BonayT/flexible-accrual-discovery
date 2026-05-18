@@ -221,5 +221,179 @@ export const SCENARIOS = [
         ]}
       ]}}
     }
+  },
+
+  // ─── E2E Cases: TransExpress Logistics S.L. ───────────────────────────────
+
+  {
+    id: "e2e_case1",
+    title: "E2E Case 1 — Tenure milestone mid-cycle (Coslada)",
+    country: "🇪🇸 Spain",
+    description: "Carlos Ruiz, Coslada warehouse. 23 days/year base + 1 day per 5-year tenure milestone (max +3). Reaches 5y in Jun 2024 → base jumps to 24. Round to nearest half day.",
+    isE2E: true,
+    employee: { hire_date: "2019-06-15", termination_date: null, country: "ES", name: "Carlos Ruiz", weekly_hours: 40, fte_ratio: 1.0, days_per_week: 5 },
+    evaluationYear: 2024,
+    mermaid: `graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| WFM["ref 'worked_full_month'"]
+    IF -->|else| ZERO[const 0]
+    IF -->|then| ROUND["round half_up step=0.5"]
+    ROUND -->|value| DIV[div]
+    DIV -->|op1| ADD[add]
+    DIV -->|op2| TWELVE[const 12]
+    ADD -->|op1| BASE["param 'base_days' = 23"]
+    ADD -->|op2| MIN[min]
+    MIN -->|op1| MUL[mul]
+    MIN -->|op2| MAX_B["param 'max_tenure_bonus' = 3"]
+    MUL -->|op1| BONUS["param 'tenure_bonus_per_milestone' = 1"]
+    MUL -->|op2| TDIV[div]
+    TDIV -->|op1| TENURE["ref 'tenure_years_at_period_end'"]
+    TDIV -->|op2| MILESTONE["param 'tenure_milestone_years' = 5"]`,
+    program: {
+      params: { base_days: 23, tenure_bonus_per_milestone: 1, tenure_milestone_years: 5, max_tenure_bonus: 3, rounding_step: 0.5 },
+      rule: { type: "accrue", amount: { type: "round", mode: "half_up", step: { type: "param", name: "rounding_step" }, value: {
+        type: "div", operands: [
+          { type: "add", operands: [
+            { type: "param", name: "base_days" },
+            { type: "min", operands: [
+              { type: "mul", operands: [
+                { type: "param", name: "tenure_bonus_per_milestone" },
+                { type: "div", operands: [
+                  { type: "floor", value: { type: "div", operands: [{ type: "ref", path: "facts.tenure_years_at_period_end" }, { type: "param", name: "tenure_milestone_years" }] } },
+                  { type: "const", value: 1 }
+                ]}
+              ]},
+              { type: "param", name: "max_tenure_bonus" }
+            ]}
+          ]},
+          { type: "const", value: 12 }
+        ]
+      }}}
+    }
+  },
+  {
+    id: "e2e_case2",
+    title: "E2E Case 2 — Part-time + contract change + sick leave (Barcelona)",
+    country: "🇪🇸 Spain",
+    description: "Laura Martínez, Barcelona. 24 days/year. Part-time (20h) Jan–Jun, full-time (40h) Jul–Dec. March: 10 sick days → 80% accrual rate.",
+    isE2E: true,
+    employee: { hire_date: "2022-03-01", termination_date: null, country: "ES", name: "Laura Martínez",
+      contracts: [
+        { weekly_hours: 20, fte_ratio: 0.5, start: "2022-03-01", end: "2024-06-30" },
+        { weekly_hours: 40, fte_ratio: 1.0, start: "2024-07-01", end: null }
+      ],
+      sick_months: [3]
+    },
+    evaluationYear: 2024,
+    mermaid: `graph TD
+    ROOT[accrue] -->|amount| IF1[if]
+    IF1 -->|cond| WFM["ref 'worked_full_month'"]
+    IF1 -->|else| ZERO[const 0]
+    IF1 -->|then| IF2[if]
+    IF2 -->|cond| EXISTS["exists in 'absences_in_period'"]
+    EXISTS -->|where| EQ["absence.type == 'sick'"]
+    IF2 -->|then| MUL_SICK["mul (sick path)"]
+    MUL_SICK -->|op1| RATIO["hours_worked / reference_hours"]
+    MUL_SICK -->|op2| MONTHLY["base_days / 12"]
+    MUL_SICK -->|op3| RATE["param 'sick_accrual_rate' = 0.8"]
+    IF2 -->|else| MUL_NORMAL["mul (normal path)"]
+    MUL_NORMAL -->|op1| FTE["ref 'contract.fte_ratio'"]
+    MUL_NORMAL -->|op2| MONTHLY2["base_days / 12"]`,
+    program: {
+      params: { base_days: 24, sick_accrual_rate: 0.8 },
+      rule: { type: "accrue", amount: { type: "if",
+        cond: { type: "ref", path: "facts.worked_full_month" },
+        then: { type: "if",
+          cond: { type: "exists", in: { type: "ref", path: "facts.absences_in_period" }, binding: "absence",
+            where: { type: "eq", left: { type: "ref", path: "absence.type" }, right: { type: "const", value: "sick_non_work_related" } } },
+          then: { type: "mul", operands: [
+            { type: "div", operands: [{ type: "ref", path: "facts.hours_worked_in_period" }, { type: "ref", path: "facts.reference_period_hours" }] },
+            { type: "div", operands: [{ type: "param", name: "base_days" }, { type: "const", value: 12 }] },
+            { type: "param", name: "sick_accrual_rate" }
+          ]},
+          else: { type: "mul", operands: [
+            { type: "ref", path: "facts.contract.fte_ratio" },
+            { type: "div", operands: [{ type: "param", name: "base_days" }, { type: "const", value: 12 }] }
+          ]}
+        },
+        else: { type: "const", value: 0 }
+      }}
+    }
+  },
+  {
+    id: "e2e_case3",
+    title: "E2E Case 3 — Overtime cap at 40h (Valencia)",
+    country: "🇪🇸 Spain",
+    description: "Miguel Fernández, Valencia supervisor. Overtime → compensatory time at 1.5×. Cap at 40h accumulated. Starts Oct at 35h. Nov: capped. Dec: fully capped.",
+    isE2E: true,
+    needsBalanceRule: true,
+    balanceRule: { type: "capped", cap: 40 },
+    employee: { hire_date: "2020-01-10", termination_date: null, country: "ES", name: "Miguel Fernández", weekly_hours: 40, fte_ratio: 1.0, days_per_week: 5,
+      overtime_months: { 1: 5, 2: 5, 3: 3, 4: 4, 5: 3, 6: 0, 7: 2, 8: 3, 9: 5, 10: 5, 11: 5, 12: 5 }
+    },
+    evaluationYear: 2024,
+    mermaid: `graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| GT["hours_worked > reference_hours"]
+    IF -->|then| MUL[mul]
+    MUL -->|op1| SUB["hours_worked - reference_hours"]
+    MUL -->|op2| RATE["param 'overtime_conversion_rate' = 1.5"]
+    IF -->|else| ZERO[const 0]
+    CAP["BalanceEvaluator cap=40"]
+    MUL --> CAP`,
+    program: {
+      params: { overtime_conversion_rate: 1.5 },
+      rule: { type: "accrue", amount: { type: "if",
+        cond: { type: "gt", left: { type: "ref", path: "facts.hours_worked_in_period" }, right: { type: "ref", path: "facts.reference_period_hours" } },
+        then: { type: "mul", operands: [
+          { type: "sub", operands: [{ type: "ref", path: "facts.hours_worked_in_period" }, { type: "ref", path: "facts.reference_period_hours" }] },
+          { type: "param", name: "overtime_conversion_rate" }
+        ]},
+        else: { type: "const", value: 0 }
+      }}
+    }
+  },
+  {
+    id: "e2e_case4",
+    title: "E2E Case 4 — Same program, different params per workplace",
+    country: "🇪🇸 Spain",
+    description: "Pedro (Coslada, 23d) vs Ana (Valencia, 25d). Same AST program, params differ by workplace dimension. Both 3y tenure, no milestone bonus yet.",
+    isE2E: true,
+    employee: { hire_date: "2021-01-15", termination_date: null, country: "ES", name: "Pedro López (Coslada)", weekly_hours: 40, fte_ratio: 1.0, days_per_week: 5 },
+    evaluationYear: 2024,
+    mermaid: `graph TD
+    ROOT[accrue] -->|amount| IF[if]
+    IF -->|cond| WFM["ref 'worked_full_month'"]
+    IF -->|else| ZERO[const 0]
+    IF -->|then| DIV[div]
+    DIV -->|op1| ADD[add]
+    DIV -->|op2| TWELVE[const 12]
+    ADD -->|op1| BASE["param 'base_days' = ⚡ varies"]
+    ADD -->|op2| MIN[min]
+    MIN -->|op1| MUL[mul]
+    MIN -->|op2| MAX_B["param 'max_tenure_bonus' = 3"]
+    MUL -->|op1| BONUS["1"]
+    MUL -->|op2| TDIV["floor(tenure / 5)"]
+    style BASE fill:#ff9,stroke:#333`,
+    variants: [
+      { label: "Pedro (Coslada)", params: { base_days: 23, tenure_bonus_per_milestone: 1, tenure_milestone_years: 5, max_tenure_bonus: 3 }, employee: { hire_date: "2021-01-15", termination_date: null, country: "ES", name: "Pedro López (Coslada)", weekly_hours: 40, fte_ratio: 1.0, days_per_week: 5 } },
+      { label: "Ana (Valencia)", params: { base_days: 25, tenure_bonus_per_milestone: 1, tenure_milestone_years: 5, max_tenure_bonus: 3 }, employee: { hire_date: "2021-01-15", termination_date: null, country: "ES", name: "Ana García (Valencia)", weekly_hours: 40, fte_ratio: 1.0, days_per_week: 5 } }
+    ],
+    program: {
+      params: { base_days: 23, tenure_bonus_per_milestone: 1, tenure_milestone_years: 5, max_tenure_bonus: 3 },
+      rule: { type: "accrue", amount: { type: "div", operands: [
+        { type: "add", operands: [
+          { type: "param", name: "base_days" },
+          { type: "min", operands: [
+            { type: "mul", operands: [
+              { type: "param", name: "tenure_bonus_per_milestone" },
+              { type: "floor", value: { type: "div", operands: [{ type: "ref", path: "facts.tenure_years_at_period_end" }, { type: "param", name: "tenure_milestone_years" }] } }
+            ]},
+            { type: "param", name: "max_tenure_bonus" }
+          ]}
+        ]},
+        { type: "const", value: 12 }
+      ]}}
+    }
   }
 ];

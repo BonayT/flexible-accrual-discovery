@@ -67,7 +67,7 @@
 <body>
 
 <h1>Flexible Accrual — AST Playground</h1>
-<p class="subtitle">Interactive validation of 10 customer pains using the AST evaluator. Edit params and see results in real time.</p>
+<p class="subtitle">Interactive validation of 10 customer pains + 4 E2E cases using the AST evaluator. Edit params and see results in real time.</p>
 
 <div class="grid">
   <div class="sidebar" id="sidebar"></div>
@@ -76,6 +76,8 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: false, theme: 'dark' });</script>
 <script type="module">
 import { evaluate } from './evaluator.js';
 import { SCENARIOS } from './scenarios.js';
@@ -84,10 +86,18 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 // Build sidebar
 const sidebar = document.getElementById("sidebar");
+let addedE2ESeparator = false;
 SCENARIOS.forEach((s, i) => {
+  if (s.isE2E && !addedE2ESeparator) {
+    addedE2ESeparator = true;
+    const sep = document.createElement("div");
+    sep.style.cssText = "border-top:2px solid var(--accent);padding:8px 0 4px;font-size:0.8em;color:var(--accent);font-weight:600;";
+    sep.textContent = "📋 E2E Cases — TransExpress Logistics S.L.";
+    sidebar.appendChild(sep);
+  }
   const btn = document.createElement("button");
   btn.className = "scenario-btn";
-  btn.innerHTML = `<div>${s.title}${s.needsBalanceRule ? '<span class="badge">balance_rule</span>' : ''}</div><div class="country">${s.country}</div>`;
+  btn.innerHTML = `<div>${s.title}${s.needsBalanceRule ? '<span class="badge">balance_rule</span>' : ''}${s.isE2E ? '<span class="badge" style="background:var(--accent)">E2E</span>' : ''}</div><div class="country">${s.country}</div>`;
   btn.onclick = () => selectScenario(i);
   sidebar.appendChild(btn);
 });
@@ -137,8 +147,13 @@ function buildFacts(scenario, month, year, accumulated) {
 
   const workingDays = 22;
   const dailyHours = weeklyHours / daysPerWeek;
-  const hoursWorked = workingDays * dailyHours;
+  let hoursWorked = workingDays * dailyHours;
   const refHours = workingDays * (40 / 5);
+
+  // Override with overtime if specified
+  if (emp.overtime_months && emp.overtime_months[month] !== undefined) {
+    hoursWorked = refHours + emp.overtime_months[month];
+  }
 
   // Absences
   const absences = [];
@@ -172,7 +187,7 @@ function buildFacts(scenario, month, year, accumulated) {
 
 function evaluateScenario(scenario, params) {
   const program = { ...scenario.program, params };
-  const year = 2026;
+  const year = scenario.evaluationYear || 2026;
   const results = [];
   let accumulated = 0;
 
@@ -235,7 +250,7 @@ function render() {
     </div>
 
     <div class="card">
-      <h3>Monthly Accrual — 2026</h3>
+      <h3>Monthly Accrual — ${s.evaluationYear || 2026}</h3>
       <div class="bar-chart" id="bar-chart"></div>
     </div>
 
@@ -250,6 +265,10 @@ function render() {
       <h3>AST Program <span style="font-size:0.8em;color:var(--muted)">(live — reflects current params &amp; employee)</span></h3>
       <pre id="ast-json"></pre>
     </div>
+
+    ${s.mermaid ? `<div class="card"><h3>AST Tree (Mermaid)</h3><div id="mermaid-container"></div></div>` : ''}
+
+    ${s.variants ? `<div class="card"><h3>Variant Comparison</h3><div id="variant-btns" style="display:flex;gap:8px;margin-bottom:12px"></div></div>` : ''}
   `;
 
   // Employee editor
@@ -306,6 +325,30 @@ function render() {
   });
 
   renderResults();
+
+  // Render Mermaid diagram
+  if (s.mermaid) {
+    const container = document.getElementById("mermaid-container");
+    if (container) {
+      const id = "mermaid-" + Date.now();
+      mermaid.render(id, s.mermaid).then(({ svg }) => { container.innerHTML = svg; }).catch(() => { container.innerHTML = '<p style="color:var(--red)">Mermaid render failed</p>'; });
+    }
+  }
+
+  // Variant buttons
+  if (s.variants) {
+    const btnContainer = document.getElementById("variant-btns");
+    if (btnContainer) {
+      s.variants.forEach(v => {
+        const b = document.createElement("button");
+        b.className = "scenario-btn";
+        b.style.cssText = "padding:6px 12px;font-size:0.82em;";
+        b.textContent = v.label;
+        b.onclick = () => { currentParams = { ...v.params }; currentEmployee = { ...v.employee }; render(); };
+        btnContainer.appendChild(b);
+      });
+    }
+  }
 }
 
 function renderResults() {

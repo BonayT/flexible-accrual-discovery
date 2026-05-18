@@ -51,7 +51,12 @@ function evalNode(node, ctx) {
     case "div": { const ops = numOps(node, ctx); return ops.slice(1).reduce((a, b) => b === 0 ? 0 : a / b, ops[0]); }
     case "min": return Math.min(...numOps(node, ctx));
     case "max": return Math.max(...numOps(node, ctx));
-    case "round": return roundValue(evalNode(node.value, ctx), node.mode, node.step || 1);
+    case "floor": return Math.floor(evalNode(node.value, ctx));
+    case "round": {
+      const step = node.step ? (typeof node.step === "object" ? evalNode(node.step, ctx) : node.step) : 1;
+      const mode = typeof node.mode === "object" ? evalNode(node.mode, ctx) : (node.mode || "half_up");
+      return roundValue(evalNode(node.value, ctx), mode, step);
+    }
     case "accrue": return evalNode(node.amount, ctx);
     default: throw new Error(`unknown node type: ${node.type}`);
   }
