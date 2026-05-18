@@ -36,13 +36,17 @@
 | FTE ratio | 1.0 |
 | Terminated | — |
 
+### User rule (natural language)
+
+> "23 vacation days per year. For every 5 years of tenure, add 1 extra day, up to a maximum of 3 extra days. Round to the nearest half day."
+
 ### Scenario
 
 Cycle 2024. Carlos reaches **5 years tenure** on 2024-06-15.
 Before that milestone: base = 23 days. After milestone: base = 24 days (+1 bonus).
 Monthly accrual changes mid-cycle.
 
-### AST Program
+### AST Program (compiled from user rule)
 
 ```json
 {
@@ -160,13 +164,17 @@ Monthly accrual changes mid-cycle.
 |------|-------|-----|------|
 | sick | 2024-03-11 | 2024-03-22 | 10 working days in March |
 
+### User rule (natural language)
+
+> "24 vacation days per year, proportional to hours worked. Part-time employees accrue in proportion to their schedule. During sick leave, accrue at 80% of effective hours."
+
 ### Scenario
 
 - Jan–Jun: Part-time (20h/week). Hours-based accrual = (hours_worked / reference_hours) × base.
 - March: 10 sick days → reduced hours worked. Sick accrual at 80% rate.
 - Jul–Dec: Full-time switch. FTE = 1.0, full monthly accrual.
 
-### AST Program
+### AST Program (compiled from user rule)
 
 ```json
 {
@@ -264,6 +272,10 @@ Monthly accrual changes mid-cycle.
 | Contract | Full-time, 40h/week |
 | Terminated | — |
 
+### User rule (natural language)
+
+> "Overtime hours are converted to compensatory time off at 1.5× rate. Maximum 40 hours of compensatory time can be accumulated per year. Once the cap is reached, no further overtime converts to time off."
+
 ### Scenario
 
 Miguel earns compensatory time (overtime hours as time-off).
@@ -357,6 +369,10 @@ December: raw = 5h × 1.5 = 7.5h → effective = min(7.5, 40 - 40) = 0.0h → ac
 | Ana García | Valencia | 25 | +1 at 5y |
 
 Both are Operarios, hired same day (2021-01-15), full-time, no leaves.
+
+### User rule (natural language)
+
+> "Same accrual rules apply to all Operarios regardless of workplace. The base entitlement is defined per workplace: Coslada gets 23 days, Valencia gets 25 days."
 
 ### Scenario
 
