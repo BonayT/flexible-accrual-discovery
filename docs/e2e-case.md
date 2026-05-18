@@ -1,7 +1,7 @@
 # End-to-End Cases — Flexible Accrual (Approach C)
 
 > **Purpose**: Define 4 realistic cases that exercise the full pipeline:
-> Employee → AccrualFactBuilder → AST Evaluator → BalanceRule → Adjustment output.
+> Employee → AccrualFactBuilder → AST Evaluator → BalanceEvaluator → Adjustment output.
 >
 > These cases serve as **W2 (Real Fact Builder) acceptance criteria**.
 > Each case specifies exactly which facts are needed, how the AST program uses them,
@@ -311,7 +311,17 @@ November and December each generate 5h overtime → cap should kick in at Decemb
 }
 ```
 
-### BalanceRule runtime behavior
+### Balance runtime behavior
+
+> **Note**: The `balance_rule` key shown in the AST above is a simplified format
+> used in our discovery. The upstream POC now uses a richer `BalanceEvaluator` with
+> bucket-based ledger, FIFO/LIFO consumption, and expiration. The upstream format is:
+> ```json
+> "balance": { "carry_over": { "max": 40 }, "consumption": <AST node> }
+> ```
+> For W2 purposes, the key requirement is unchanged: the FactBuilder provides
+> `hours_worked_in_period` and `reference_period_hours`; the runtime injects
+> `accumulated_balance` before each evaluation.
 
 ```
 accumulated = 35.0  (from Jan–Oct)
@@ -429,7 +439,7 @@ Based on all 4 cases, the FactBuilder must:
 
 1. **FactBuilder only builds facts** — it never evaluates the AST.
 2. **Params come from policy assignment** (Rules Engine) — FactBuilder doesn't know about them.
-3. **`accumulated_balance` is injected** by the BalanceRule orchestrator, not queried from DB each time.
+3. **`accumulated_balance` is injected** by the BalanceEvaluator runtime (bucket-based ledger), not queried from DB each time.
 4. **Active contract resolution**: pick the contract whose `[start_date, end_date]` overlaps the period, preferring most recent.
 5. **Calendar integration**: `working_days` per period comes from the company's Calendar (accounting for public holidays).
 6. **`requires` array** in the AST program tells the runtime which specific facts to build, avoiding unnecessary DB queries.
