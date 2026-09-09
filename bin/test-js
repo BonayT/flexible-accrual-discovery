@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# What the simulator rests on: the CEL interpreter, the accrual engine and the
+# four walls. No dependencies, no runner. The Ruby suite in bin/test covers the
+# AST evaluator from the earlier POC and is unrelated to these.
+set -e
+for suite in cel engine walls; do
+  printf '%-8s ' "$suite"
+  node "$(dirname "$0")/../docs/$suite.test.js"
+done

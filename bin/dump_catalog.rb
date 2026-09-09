@@ -1,0 +1,243 @@
+# Dumps the Factor entity catalog the accrual simulator reads, straight from files
+# in the monorepo: no Rails, no database, no boot.
+#
+#   ruby bin/dump_catalog.rb ~/code/factorial > docs/catalog.json
+#
+# Sources, in the order they are merged:
+#   registry_snapshot.yml  fields + Sorbet types + association names + filters
+#   <component>/app/resources/**.yml  descriptions, and the relationship targets
+#     the snapshot does not carry (it stores association names only)
+#
+# Descriptions marked `serialization_groups: [private]` are NOT reproduced: the
+# simulator is published, and that prose is internal. The field still appears,
+# flagged so the page can say the description exists and was withheld.
+
+require 'yaml'
+require 'json'
+
+ROOT = File.expand_path(ARGV[0] || File.join(Dir.home, 'code/factorial'))
+BACKEND = File.join(ROOT, 'backend')
+
+# --- What an accrual rule can actually reach, per state -----------------------
+#
+# The snapshot says what is REGISTERED. Registration is not reach: a rule reads
+# an entity only where the evaluator BINDS it as an input. These are the binding
+# states the simulator switches between.
+#
+# `runtime_inputs` mirrors `RUNTIME_INPUT_CATALOG`
+# (timeoff/app/services/timeoff/factor/accrual_evaluator.rb). It is transcribed
+# rather than parsed -- the constant is a Sorbet-typed literal inside a class, so
+# there is no way to read it without booting Rails -- and `verify_inputs!` fails
+# the dump if a key here no longer appears in that file, so a rename cannot pass
+# silently.
+RUNTIME_INPUTS = {
+  'allowance' => { 'kind' => 'entity', 'entity' => 'timeoff.allowance',
+                   'summary' => 'The counter being computed.' },
+  'active_days' => { 'kind' => 'float', 'role' => 'accrual',
+                     'summary' => 'Days active within the cycle; numerator of day proration.' },
+  'cycle_days' => { 'kind' => 'float', 'role' => 'accrual',
+                    'summary' => 'Total days in the cycle; the denominator.' },
+  'tenure_adjustment_units' => { 'kind' => 'float', 'role' => 'tenure',
+                                 'summary' => "The seniority bonus already sized, in the counter's unit." },
+  'source_amount_units' => { 'kind' => 'float', 'role' => 'base_entitlement',
+                             'summary' => 'Pre-computed accrual for a by_worked_time counter; 0.0 otherwise.' },
+  'availability_fraction' => { 'kind' => 'float', 'role' => 'accrual',
+                               'summary' => 'Portion of the cycle available so far. Always 1.0 in production today.' },
+  'tenure_fraction' => { 'kind' => 'float', 'role' => 'tenure',
+                         'summary' => 'Proration of the tenure bonus for a mid-cycle milestone.' },
+  'hire_date' => { 'kind' => 'date', 'role' => 'accrual',
+                   'summary' => 'NOT the hire date: cycle.start_at, the contract start clipped to the cycle and the policy timeline.' },
+  'cycle_start_date' => { 'kind' => 'date', 'role' => 'accrual',
+                          'summary' => 'First day of the cycle being computed.' },
+  'cycle_end_date' => { 'kind' => 'date', 'role' => 'accrual',
+                        'summary' => 'Last day of the cycle being computed.' },
+  'tenure_date' => { 'kind' => 'date', 'role' => 'tenure',
+                     'summary' => 'Seniority origin; falls back to contract start, so always present.' }
+}.freeze
+
+def verify_inputs!
+  path = File.join(BACKEND, 'components/timeoff/app/services/timeoff/factor/accrual_evaluator.rb')
+  source = File.read(path)
+  missing = RUNTIME_INPUTS.keys.reject { |key| source.include?("'#{key}' =>") }
+  return if missing.empty?
+
+  abort "RUNTIME_INPUTS no longer match #{path} (renamed?): #{missing.join(', ')}"
+end
+
+# Registered by #112685 and not yet on main, so the snapshot cannot carry it.
+PR_112685_ENTITY = {
+  'timeoff.allowance_tenure_period' => {
+    'fields' => {
+      'id' => 'T.nilable(Integer)',
+      'timeoff_allowance_id' => 'T.nilable(Integer)',
+      'period_type' => 'T.nilable(String)',
+      'period_length' => 'T.nilable(Integer)',
+      'max_cap_in_cents' => 'T.nilable(Integer)',
+      'balance_type' => 'T.nilable(String)'
+    },
+    'associations' => []
+  }
+}.freeze
+
+BINDINGS = {
+  'today' => {
+    'label' => 'Lo que llega hoy',
+    'entities' => { 'allowance' => 'timeoff.allowance' },
+    'scalars' => RUNTIME_INPUTS.reject { |_, v| v['kind'] == 'entity' }.keys
+  },
+  'pr_112683' => {
+    'label' => 'Con #112683 — el contrato',
+    'entities' => { 'contract' => 'contracts.contract_version' },
+    'scalars' => [],
+    'caveat' => 'The bound row is the REFERENCE contract, resolved today ' \
+                '(Contracts::Repositories::ReferenceContracts), not the version in force ' \
+                'during the cycle being computed. A mid-cycle change reads as its end state, ' \
+                'and a recomputed past cycle reads as today.'
+  },
+  'pr_112685' => {
+    'label' => 'Con #112685 — el tramo de antigüedad',
+    'entities' => { 'tenure' => 'timeoff.allowance_tenure_period' },
+    'scalars' => [],
+    'caveat' => 'The rung answers WHICH tier applies, never its amount: adjustment_in_cents ' \
+                'is deliberately off the allowlist, so the bonus stays on its guarded path.'
+  },
+  'discarded_facts' => {
+    'label' => 'Los tres facts que ya se calculan y se tiran',
+    'entities' => {},
+    'scalars' => %w[tenure_years_at_period_start tenure_months_at_period_start absences_in_period],
+    'caveat' => 'Computed on every evaluation in AccrualFactBuilder and never fed: three keys ' \
+                'in the allowlist, no new read.'
+  }
+}.freeze
+
+# Wall 3. Exposure does not touch this: it is a predicate on the counter itself.
+ELIGIBILITY_GATE = {
+  'source' => 'backend/components/timeoff/app/services/timeoff/factor/counter_program_assignment.rb:33',
+  'conditions' => [
+    'company feature DEV_FLEXIBLE_ACCRUAL_AUTHORITATIVE enabled',
+    'allowance.base_units? — a by_worked_time counter never qualifies',
+    'allowance.use_availability == all_days — any cadence disqualifies the counter'
+  ]
+}.freeze
+
+# Wall 4. Where the computed number stops governing.
+LANDING_GAPS = [
+  { 'area' => 'booking',
+    'note' => 'The booking gate re-runs legacy availability over the policy allowance and takes ' \
+              'total_allowance from legacy; only .total is replaced. A rule that lowers the ' \
+              'entitlement would still let people book against the legacy figure.' },
+  { 'area' => 'carry_over',
+    'note' => 'CalculateCycleCarryOver never consults Factor, so an assigned counter carries over ' \
+              "legacy's number while showing CEL's balance all year." }
+]. freeze
+
+def snapshot
+  YAML.unsafe_load_file(File.join(BACKEND, 'components/factor/registry_snapshot.yml'))
+end
+
+def resource_file(identifier)
+  component, name = identifier.split('.', 2)
+  dir = File.join(BACKEND, "components/#{component}/app/resources/#{component}")
+  return nil unless Dir.exist?(dir)
+
+  candidates = Dir[File.join(dir, '*.yml')]
+  candidates.find { |p| File.basename(p, '.yml') == name } ||
+    candidates.find { |p| File.basename(p, '.yml') == "#{name}s" }
+end
+
+def resource_doc(identifier)
+  path = resource_file(identifier)
+  return [nil, nil] unless path
+
+  [YAML.unsafe_load_file(path), path.sub("#{ROOT}/", '')]
+end
+
+# Every property across the resource's raw_json_schema blocks. A resource can
+# declare more than one (ContractVersion is overwritten by reference_contract.yml
+# at apidoc build time), so the first definition of a property name wins.
+def properties_for(doc)
+  schemas = doc.dig('schema', 'raw_json_schema') || {}
+  schemas.each_value.with_object({}) do |schema, out|
+    (schema['properties'] || {}).each { |name, prop| out[name] ||= prop }
+  end
+end
+
+def relationships_for(doc)
+  (doc['relationships'] || []).to_h do |rel|
+    [rel['name'].to_s, rel]
+  end
+end
+
+def field_entry(name, sorbet_type, properties)
+  prop = properties[name]
+  description = prop && prop['description'].to_s.strip
+  private_prose = Array(prop && prop['serialization_groups']).include?('private')
+
+  entry = { 'type' => sorbet_type, 'nullable' => sorbet_type.to_s.start_with?('T.nilable') }
+  if description.nil? || description.empty?
+    entry['described'] = false
+  elsif private_prose
+    # The prose exists and disambiguates, but it is internal: say so, do not copy it.
+    entry['described'] = true
+    entry['description_withheld'] = true
+  else
+    entry['described'] = true
+    entry['description'] = description.gsub(/\s+/, ' ')
+  end
+  entry
+end
+
+def association_entry(name, relationship)
+  return { 'target' => nil, 'unresolved' => true } if relationship.nil?
+
+  entry = { 'target' => relationship['resource_id'].to_s.delete_prefix(':') }
+  entry['optional'] = true if relationship['optional']
+  entry['kind'] = relationship['type'] if relationship['type']
+  desc = relationship['description'].to_s.strip
+  entry['description'] = desc.gsub(/\s+/, ' ') unless desc.empty?
+  entry
+end
+
+entities = snapshot.fetch('entities').to_h do |identifier, entry|
+  doc, source = resource_doc(identifier)
+  properties = doc ? properties_for(doc) : {}
+  relationships = doc ? relationships_for(doc) : {}
+
+  fields = (entry['fields'] || {}).to_h do |name, sorbet_type|
+    [name, field_entry(name, sorbet_type, properties)]
+  end
+
+  associations = (entry['associations'] || []).to_h do |name|
+    [name, association_entry(name, relationships[name])]
+  end
+
+  resource_description = doc && doc['description'].to_s.strip
+  built = { 'fields' => fields, 'associations' => associations }
+  built['source'] = source if source
+  if resource_description && !resource_description.empty?
+    built['description'] = resource_description.gsub(/\s+/, ' ')
+  end
+
+  [identifier, built]
+end
+
+verify_inputs!
+
+PR_112685_ENTITY.each do |identifier, entry|
+  doc, source = resource_doc(identifier)
+  properties = doc ? properties_for(doc) : {}
+  fields = entry['fields'].to_h { |name, type| [name, field_entry(name, type, properties)] }
+  built = { 'fields' => fields, 'associations' => {}, 'registered_by' => 'pr_112685' }
+  built['source'] = source if source
+  entities[identifier] = built
+end
+
+puts JSON.pretty_generate(
+  'generated_from' => 'backend/components/factor/registry_snapshot.yml + app/resources/**/*.yml',
+  'entity_count' => entities.size,
+  'runtime_inputs' => RUNTIME_INPUTS,
+  'bindings' => BINDINGS,
+  'eligibility_gate' => ELIGIBILITY_GATE,
+  'landing_gaps' => LANDING_GAPS,
+  'entities' => entities
+)

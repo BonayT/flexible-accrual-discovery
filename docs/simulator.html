@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accrual — ¿se cubre esta regla?</title>
+<style>
+  :root { --bg:#0d1117; --surface:#161b22; --surface-2:#1c2333; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --purple:#a371f7; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); padding:20px; max-width:1500px; margin:0 auto; }
+  h1 { font-size:1.5em; margin-bottom:4px; }
+  .subtitle { color:var(--muted); font-size:0.9em; margin-bottom:8px; }
+  .disclaimer { background:#2d1b00; border:1px solid var(--yellow); border-radius:6px; padding:10px 14px; font-size:0.86em; color:var(--yellow); margin-bottom:18px; }
+  .grid { display:grid; grid-template-columns:320px 1fr; gap:20px; align-items:start; }
+  @media (max-width:900px) { .grid { grid-template-columns:1fr; } }
+
+  .sidebar { display:flex; flex-direction:column; gap:6px; max-height:88vh; overflow-y:auto; padding-right:6px; }
+  .sep { border-top:2px solid var(--accent); padding:10px 0 4px; font-size:0.78em; color:var(--accent); font-weight:600; position:sticky; top:0; background:var(--bg); }
+  .sep.pains { border-top-color:var(--purple); color:var(--purple); }
+  .shortcut { background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:8px 10px; text-align:left; cursor:pointer; color:var(--text); font-size:0.78em; line-height:1.35; font-family:inherit; }
+  .shortcut:hover { border-color:var(--accent); }
+  .shortcut .who { color:var(--muted); font-size:0.9em; display:block; margin-top:3px; }
+  .dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .dot.applied { background:var(--green); } .dot.partial { background:var(--yellow); } .dot.refused { background:var(--red); }
+
+  .main { display:flex; flex-direction:column; gap:14px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+  .card h2 { font-size:1.05em; margin-bottom:8px; }
+  .card h3 { font-size:0.82em; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:8px; }
+
+  textarea { width:100%; min-height:78px; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; color:var(--text); font-size:0.95em; font-family:inherit; resize:vertical; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  button.go { background:var(--accent); color:#04121f; border:none; border-radius:6px; padding:8px 18px; font-size:0.9em; font-weight:600; cursor:pointer; font-family:inherit; }
+  button.go:disabled { opacity:0.5; cursor:default; }
+  .toggle { display:inline-flex; align-items:center; gap:6px; font-size:0.82em; color:var(--muted); cursor:pointer; background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:6px 10px; }
+  .toggle input { accent-color:var(--accent); }
+  .toggle.on { border-color:var(--accent); color:var(--text); }
+
+  .verdict { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .badge { font-size:0.8em; font-weight:600; padding:3px 10px; border-radius:20px; }
+  .badge.yes { background:#0d2f22; color:var(--green); border:1px solid var(--green); }
+  .badge.no { background:#2d1215; color:var(--red); border:1px solid var(--red); }
+  .badge.warn { background:#2d1b00; color:var(--yellow); border:1px solid var(--yellow); }
+
+  .walls { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+  @media (max-width:700px) { .walls { grid-template-columns:1fr 1fr; } }
+  .wall { background:var(--surface-2); border:1px solid var(--border); border-left-width:3px; border-radius:4px; padding:8px 10px; font-size:0.78em; }
+  .wall.ok { border-left-color:var(--green); } .wall.ko { border-left-color:var(--red); } .wall.warn { border-left-color:var(--yellow); }
+  .wall .name { font-weight:600; text-transform:uppercase; font-size:0.85em; letter-spacing:0.06em; color:var(--muted); }
+  .wall .state { margin-top:3px; line-height:1.35; }
+
+  table { width:100%; border-collapse:collapse; font-size:0.85em; }
+  th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); color:var(--muted); font-weight:500; font-size:0.9em; }
+  td { padding:6px 8px; border-bottom:1px solid var(--border); vertical-align:top; }
+  td.num { text-align:right; font-family:'SF Mono',Monaco,monospace; }
+  .path { font-family:'SF Mono',Monaco,monospace; font-size:0.92em; color:var(--accent); }
+  .desc { color:var(--muted); font-size:0.92em; line-height:1.4; }
+  .tag { font-size:0.85em; padding:1px 6px; border-radius:3px; border:1px solid var(--border); color:var(--muted); white-space:nowrap; }
+  .tag.today { border-color:var(--green); color:var(--green); }
+  .tag.pr { border-color:var(--yellow); color:var(--yellow); }
+  .tag.none { border-color:var(--red); color:var(--red); }
+  .tag.list { border-color:var(--purple); color:var(--purple); }
+
+  pre { background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:10px; font-size:0.8em; overflow-x:auto; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+  .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; }
+  .field label { display:block; font-size:0.75em; color:var(--muted); margin-bottom:2px; }
+  .field input, .field select { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:5px 7px; color:var(--text); font-size:0.85em; font-family:'SF Mono',Monaco,monospace; }
+  .field input:focus, .field select:focus { outline:none; border-color:var(--accent); }
+
+  .bars { display:flex; align-items:flex-end; gap:12px; height:130px; margin-top:10px; }
+  .barcol { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end; }
+  .barpair { display:flex; gap:3px; align-items:flex-end; width:100%; height:100%; }
+  .bar { flex:1; border-radius:3px 3px 0 0; min-height:2px; }
+  .bar.now { background:#30454f; } .bar.new { background:var(--accent); } .bar.new.down { background:var(--yellow); }
+  .barlab { font-size:0.7em; color:var(--muted); }
+  .legend { display:flex; gap:14px; font-size:0.75em; color:var(--muted); margin-top:8px; }
+  .swatch { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+  .err { color:var(--red); font-size:0.85em; line-height:1.5; }
+  .hint { color:var(--muted); font-size:0.8em; margin-top:4px; line-height:1.45; }
+  .quote { border-left:2px solid var(--border); padding-left:10px; color:var(--muted); font-size:0.85em; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<h1>¿Se cubre esta regla?</h1>
+<p class="subtitle">Escribe lo que pediría un cliente y mira qué pasaría en producción: qué dato hace falta, de dónde sale, qué expresión se genera y qué número da, al lado del que da hoy.</p>
+<div class="disclaimer">
+  <strong>Esto no es One.</strong> La frase la resuelve un modelo al que le pasamos nuestro catálogo de facts, no la skill de autoría que corre en producción. Lo que se mide aquí es si el dato llega y si la regla se puede escribir, no lo buena que es One redactando.
+</div>
+
+<div class="grid">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="main">
+
+    <div class="card">
+      <textarea id="prompt" placeholder="Los part-timers acumulan en proporción a su jornada"></textarea>
+      <div class="row">
+        <button class="go" id="run">Simular</button>
+        <label class="toggle on" id="t83"><input type="checkbox" id="bind83" checked> #112683 · el contrato</label>
+        <label class="toggle on" id="t85"><input type="checkbox" id="bind85" checked> #112685 · el tramo de antigüedad</label>
+        <label class="toggle" id="tc"><input type="checkbox" id="canned"> respuestas pregrabadas</label>
+        <span class="hint" id="status"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>El empleado y el contador simulados</h3>
+      <div class="fields" id="editor"></div>
+    </div>
+
+    <div id="result"></div>
+
+  </div>
+</div>
+
+<script type="module">
+import { PROMPTS } from './prompts.js';
+import { PAINS } from './pains.js';
+import { simulate, canonicalExpression } from './engine.js';
+import { referencedFacts } from './cel.js';
+import { assess, resolvePath, rootIndex, allRoots } from './walls.js';
+
+const catalog = await fetch('./catalog.json').then((r) => r.json());
+
+// --- the simulated world ------------------------------------------------------
+
+const employee = {
+  contract_starts_on: '2019-06-01',
+  terminated_on: '',
+  tenure_date: '2019-06-01',
+  working_time_percentage_in_cents: 5000,
+  working_hours: 20,
+  working_week_days: 'monday,tuesday,wednesday',
+  country: 'ES'
+};
+
+const counter = {
+  allowance_type: 'days',
+  holiday_allowance_in_cents: 2200,
+  proration_type: 'proration_disabled',
+  rounding: 'decimals',
+  rounding_approximation: false,
+  timeoff_cycle: 'jan_dec',
+  cycle_length: 12,
+  use_availability: 'all_days',
+  source_units: 'base_units',
+  feature_enabled: true,
+  tenure_periods_enabled: true,
+  tenure_period_transition: 'beginning_of_cycle',
+  tenure_periods: [{ period_type: 'years', period_length: 5, adjustment_in_cents: 200 }]
+};
+
+const EDITABLE = [
+  ['contract_starts_on', 'Alta del contrato', 'date', employee],
+  ['terminated_on', 'Fecha de baja', 'date', employee],
+  ['tenure_date', 'Antigüedad desde', 'date', employee],
+  ['working_time_percentage_in_cents', '% jornada (en céntimos, vacío = completa)', 'number', employee],
+  ['working_hours', 'Horas semanales', 'number', employee],
+  ['country', 'País', 'text', employee],
+  ['holiday_allowance_in_cents', 'Derecho base (céntimos)', 'number', counter],
+  ['proration_type', 'Prorrateo', 'select:proration_disabled,proration_enabled', counter],
+  ['rounding', 'Redondeo', 'select:decimals,round_up,quarters,half_day', counter],
+  ['allowance_type', 'Unidad', 'select:days,hours', counter],
+  ['use_availability', 'Cadencia', 'select:all_days,daily,monthly_first_day,monthly_last_day', counter],
+  ['source_units', 'Origen', 'select:base_units,by_worked_time', counter]
+];
+
+function renderEditor() {
+  const host = document.getElementById('editor');
+  host.innerHTML = '';
+  for (const [key, label, type, target] of EDITABLE) {
+    const div = document.createElement('div');
+    div.className = 'field';
+    if (type.startsWith('select:')) {
+      const options = type.slice(7).split(',');
+      div.innerHTML = `<label>${label}</label><select data-key="${key}">${options
+        .map((o) => `<option value="${o}"${target[key] === o ? ' selected' : ''}>${o}</option>`)
+        .join('')}</select>`;
+    } else {
+      div.innerHTML = `<label>${label}</label><input type="${type}" data-key="${key}" value="${target[key] ?? ''}">`;
+    }
+    const input = div.querySelector('input,select');
+    input.addEventListener('change', (e) => {
+      const raw = e.target.value;
+      target[key] = type === 'number' ? (raw === '' ? null : Number(raw)) : raw;
+      if (lastAnswer) render(lastAnswer);
+    });
+    host.appendChild(div);
+  }
+}
+
+// --- shortcuts -----------------------------------------------------------------
+
+function renderSidebar() {
+  const host = document.getElementById('sidebar');
+  const families = [...new Set(PROMPTS.map((p) => p.family))];
+
+  for (const family of families) {
+    const sep = document.createElement('div');
+    sep.className = 'sep';
+    sep.textContent = family;
+    host.appendChild(sep);
+    for (const p of PROMPTS.filter((x) => x.family === family)) {
+      const btn = document.createElement('button');
+      btn.className = 'shortcut';
+      btn.innerHTML = `<span class="dot ${p.outcome}"></span>${escape(p.text.slice(0, 110))}${p.text.length > 110 ? '…' : ''}<span class="who">${escape(p.source)}</span>`;
+      btn.onclick = () => fill(p.text);
+      host.appendChild(btn);
+    }
+  }
+
+  const sep = document.createElement('div');
+  sep.className = 'sep pains';
+  sep.textContent = 'Pains de la tabla';
+  host.appendChild(sep);
+  for (const pain of PAINS) {
+    const btn = document.createElement('button');
+    btn.className = 'shortcut';
+    btn.innerHTML = `<span class="dot partial"></span>${escape(pain.title)}<span class="who">#${pain.pain} · ${pain.companies} co. · ${pain.cmrr.toLocaleString('es-ES')} €</span>`;
+    btn.onclick = () => fill(pain.facts.length ? `${pain.title}. Datos que necesita la regla: ${pain.facts.join(', ')}.` : pain.title);
+    host.appendChild(btn);
+  }
+}
+
+const escape = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function fill(text) {
+  document.getElementById('prompt').value = text;
+  document.getElementById('prompt').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// --- what we tell the model ------------------------------------------------------
+
+function enabledStates() {
+  const states = [];
+  if (document.getElementById('bind83').checked) states.push('pr_112683');
+  if (document.getElementById('bind85').checked) states.push('pr_112685');
+  return states;
+}
+
+// The catalog the model is allowed to author against: the bound entities' own
+// fields, plus the entities reachable from them by singular hops. Collections are
+// left out on purpose — they are readable and useless, and offering them would
+// invite an expression that cannot be evaluated.
+function authoringCatalog(enabled) {
+  const roots = rootIndex(catalog, enabled);
+  const lines = [];
+
+  for (const [name, root] of Object.entries(roots)) {
+    if (root.kind !== 'entity') continue;
+    lines.push(...describeEntity(name, root.identifier, 0, new Set()));
+  }
+
+  const scalars = Object.entries(catalog.runtime_inputs)
+    .filter(([, input]) => input.kind !== 'entity')
+    .map(([name, input]) => `  ${name} (${input.kind}) — ${input.summary}`);
+
+  return [
+    'ENTRADAS ESCALARES QUE EL MOTOR ALIMENTA CADA CICLO:',
+    ...scalars,
+    '',
+    'ENTIDADES ENLAZADAS Y SUS CAMPOS:',
+    ...lines
+  ].join('\n');
+}
+
+function describeEntity(path, identifier, depth, seen) {
+  if (depth > 2 || seen.has(identifier)) return [];
+  const entity = catalog.entities[identifier];
+  if (!entity) return [];
+  seen.add(identifier);
+
+  const out = [`  ${path} → ${identifier}`];
+  for (const [field, descriptor] of Object.entries(entity.fields)) {
+    const description = descriptor.description ? ` — ${descriptor.description}` : '';
+    out.push(`    ${path}.${field} (${descriptor.type})${description}`);
+  }
+  for (const [name, association] of Object.entries(entity.associations)) {
+    if (['has_many', 'has_many_through'].includes(association.kind)) continue;
+    out.push(...describeEntity(`${path}.${name}`, association.target, depth + 1, new Set(seen)));
+  }
+  return out;
+}
+
+const CEL_RULES = `
+El lenguaje es CEL, con el dialecto exacto de Factor:
+- No hay reloj: no existe today() ni now(). Las fechas llegan como facts.
+- No existe max() ni min(): son math.greatest(a, b) y math.least(a, b).
+- Redondeo: round.nearest(x, paso), round.up, round.down, round.away_from_zero, round.banded(x, paso, bajo, alto).
+- Calendario: calendar.months_between(a, b) (excluyente), calendar.period_start/period_end(ts, "monthly", tz), calendar.count_working_days(a, b).
+- Fechas: ts.getDate(), ts.getMonth() (0 = enero), ts.getFullYear(), ts.getDayOfWeek() (0 = domingo). Restar dos fechas da una duración: (a - b).getHours() / 24.0 son días.
+- No hay fold: nada de sum, reduce ni recorrer listas.
+- El resultado tiene que ser un float y la expresión entera debe ir envuelta en una llamada de redondeo.
+- Los importes en céntimos se dividen: holiday_allowance_in_cents / 100.0, working_time_percentage_in_cents / 10000.0.
+`.trim();
+
+function modelPrompt(text, enabled) {
+  return `Eres el motor de autoría de reglas de acumulación de vacaciones de Factorial. Un administrador te pide una regla en prosa. Tu trabajo es decidir si se puede expresar con los datos que el motor alimenta, y si se puede, escribir la expresión.
+
+PETICIÓN DEL ADMINISTRADOR:
+"""
+${text}
+"""
+
+${CEL_RULES}
+
+${authoringCatalog(enabled)}
+
+Contesta SOLO con un objeto JSON, sin texto alrededor y sin vallas de código:
+{
+  "expressible": true o false,
+  "expression": "la expresión CEL completa, o null",
+  "reasoning": "una o dos frases en castellano explicando qué has hecho o por qué no se puede",
+  "missing": ["el dato o la capacidad que falta, en castellano, si no se puede"],
+  "settings": "el cambio de configuración del contador que haría falta, o null"
+}
+
+Si la petición no es de acumulación (aprobaciones, avisos, arrastre, cómo se disfrutan los días), di que no es expresable y dilo en missing.`;
+}
+
+// --- the model ---------------------------------------------------------------------
+
+// Four answers recorded from a real run, kept so the page still demonstrates
+// itself when there is no model behind it: an unreliable connection in a room
+// full of people is a bad moment to discover the demo needs the network. Every
+// canned answer is labelled as such on screen — it must never pass for the
+// model's.
+const CANNED = [
+  {
+    match: /part.?time|parcial|jornada|fte|proporción a su jornada/i,
+    expressible: true,
+    expression: 'round.nearest(double(allowance.holiday_allowance_in_cents) / 100.0 * (double(contract.working_time_percentage_in_cents) / 10000.0), 0.01)',
+    reasoning: 'El derecho base escalado por el porcentaje de jornada del contrato, que llega como entidad enlazada.',
+    missing: [],
+    settings: null
+  },
+  {
+    match: /lugar de trabajo|centro|guadalajara|segovia|workplace/i,
+    expressible: true,
+    expression: "round.nearest(contract.employee.default_location.country == 'ES' ? double(allowance.holiday_allowance_in_cents) / 100.0 + 1.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)",
+    reasoning: 'El centro de trabajo se alcanza navegando desde el contrato hasta el empleado y su localización.',
+    missing: [],
+    settings: null
+  },
+  {
+    match: /100 personas|headcount|plantilla del centro/i,
+    expressible: false,
+    expression: null,
+    reasoning: 'Hace falta contar cuánta gente hay en el centro a la fecha del ciclo, y una regla no puede contar filas.',
+    missing: ['el número de personas por centro de trabajo: no es un campo, es un agregado, y accrual no enlaza ninguno'],
+    settings: null
+  },
+  {
+    match: /cese|cesat|baja antes del|termination|se va antes/i,
+    expressible: true,
+    expression: 'round.nearest(contract.employee.terminated_on != null && contract.employee.terminated_on.getDate() < 15 ? 0.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)',
+    reasoning: 'La fecha de baja llega navegando del contrato al empleado, así que el corte del día 15 se puede escribir.',
+    missing: [],
+    settings: null
+  }
+];
+
+async function askModel(text, enabled) {
+  if (document.getElementById('canned').checked) {
+    const hit = CANNED.find((c) => c.match.test(text));
+    if (!hit) throw new Error('No tengo una respuesta pregrabada para esa frase. Desmarca "pregrabadas" para preguntarle al modelo.');
+    return { ...hit, canned: true };
+  }
+
+  const prompt = modelPrompt(text, enabled);
+
+  const sample = window.claude && window.claude.use ? await window.claude.use('sample') : null;
+  if (sample) {
+    const answer = await sample.json(prompt, { modelTier: 'complex' });
+    return answer;
+  }
+
+  const key = localStorage.getItem('anthropic_key') || window.prompt('Pega una clave de la API de Anthropic (se guarda solo en este navegador)');
+  if (!key) throw new Error('Sin clave no puedo llamar al modelo.');
+  localStorage.setItem('anthropic_key', key);
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-5',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+  if (!response.ok) throw new Error(`La API ha contestado ${response.status}: ${await response.text()}`);
+  const payload = await response.json();
+  const raw = payload.content.map((c) => c.text || '').join('').trim();
+  return JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
+}
+
+// --- running and rendering ------------------------------------------------------------
+
+let lastAnswer = null;
+
+async function run() {
+  const text = document.getElementById('prompt').value.trim();
+  if (!text) return;
+
+  const button = document.getElementById('run');
+  const status = document.getElementById('status');
+  button.disabled = true;
+  status.textContent = 'Preguntando al modelo…';
+
+  try {
+    lastAnswer = { text, answer: await askModel(text, enabledStates()) };
+    status.textContent = '';
+    render(lastAnswer);
+  } catch (error) {
+    status.textContent = '';
+    document.getElementById('result').innerHTML = `<div class="card"><h2>No he podido resolverlo</h2><p class="err">${escape(error.message)}</p></div>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function render({ text, answer }) {
+  const enabled = enabledStates();
+  const expression = answer.expressible ? answer.expression : null;
+  const year = new Date().getUTCFullYear();
+
+  const rows = simulate({
+    counter,
+    employee: { ...employee, terminated_on: employee.terminated_on || null },
+    expression,
+    from: `${year - 2}-01-01`,
+    to: `${year + 2}-12-31`,
+    bindContract: enabled.includes('pr_112683'),
+    bindTenure: enabled.includes('pr_112685')
+  });
+
+  const current = rows.find((r) => r.label === String(year)) || rows[0];
+  const reads = expression ? safeReads(expression) : [];
+  const verdict = assess({
+    catalog,
+    counter,
+    reads,
+    result: expression ? current.authored : { error: (answer.missing || []).join('; ') || 'el modelo dice que no se puede' },
+    todayValue: current.today.value,
+    enabled
+  });
+
+  document.getElementById('result').innerHTML = `
+    ${answer.canned ? '<div class="disclaimer" style="margin-bottom:14px">Respuesta <strong>pregrabada</strong>, no la ha escrito el modelo ahora mismo.</div>' : ''}
+    ${verdictCard(answer, verdict)}
+    ${factCard(reads, current, enabled)}
+    ${operationCard(answer, expression, current)}
+    ${engineCard(rows, current, expression)}
+  `;
+}
+
+function safeReads(expression) {
+  try { return referencedFacts(expression); } catch { return []; }
+}
+
+function verdictCard(answer, verdict) {
+  const badge = !answer.expressible || !verdict.covered
+    ? '<span class="badge no">no se cubre</span>'
+    : verdict.warning
+      ? '<span class="badge warn">se calcula, pero no gobierna del todo</span>'
+      : '<span class="badge yes">se cubre</span>';
+
+  const walls = verdict.walls.map((wall) => {
+    const state = wallState(wall);
+    return `<div class="wall ${state.cls}"><div class="name">${wall.wall}</div><div class="state">${state.text}</div></div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="verdict">${badge}<span class="desc">${escape(answer.reasoning || '')}</span></div>
+    <div class="walls">${walls}</div>
+    ${(answer.missing || []).length ? `<p class="hint"><strong>Falta:</strong> ${answer.missing.map(escape).join(' · ')}</p>` : ''}
+    ${answer.settings ? `<p class="hint"><strong>Cambio de configuración:</strong> ${escape(answer.settings)}</p>` : ''}
+  </div>`;
+}
+
+function wallState(wall) {
+  if (wall.wall === 'dato') {
+    if (wall.passes) return { cls: 'ok', text: 'todos los facts llegan' };
+    if (wall.blocked.length) {
+      const first = wall.blocked[0];
+      const where = first.availableIn ? `llega con ${first.availableIn.replace('pr_', '#')}` : 'no existe expuesto';
+      return { cls: 'ko', text: `<span class="path">${escape(first.path)}</span> — ${where}` };
+    }
+    return { cls: 'warn', text: `${wall.trapped.length} dentro de una lista, sin forma de leerlos` };
+  }
+  if (wall.wall === 'operación') return wall.passes ? { cls: 'ok', text: 'CEL la acepta' } : { cls: 'ko', text: escape(wall.reason || '') };
+  if (wall.wall === 'elegibilidad') return wall.passes
+    ? { cls: 'ok', text: 'el contador recibe programa' }
+    : { cls: 'ko', text: wall.failures.map(escape).join('; ') };
+  return wall.passes
+    ? { cls: 'ok', text: 'el número gobierna' }
+    : { cls: 'warn', text: 'difiere de legacy: la reserva y el arrastre siguen leyendo legacy' };
+}
+
+function factCard(reads, row, enabled) {
+  if (!reads.length) return '';
+  const roots = rootIndex(catalog, enabled);
+
+  const body = reads.map((path) => {
+    const resolved = resolvePath(catalog, roots, path);
+    // A field that does not arrive is still a field we can describe: resolving it
+    // again against every binding is what lets the card say what it would be and
+    // which pull request would bring it.
+    const known = resolved.reachable ? resolved : resolvePath(catalog, allRoots(catalog), path);
+    const value = valueAt(row.facts, path);
+
+    let tag = '<span class="tag none">no llega</span>';
+    if (resolved.reachable) {
+      if (resolved.throughCollection) tag = '<span class="tag list">en una lista</span>';
+      else if (resolved.state === 'today') tag = '<span class="tag today">llega hoy</span>';
+      else tag = `<span class="tag pr">${resolved.state.replace('pr_', '#')}</span>`;
+    } else if (known.reachable) {
+      tag = `<span class="tag none">apagado: ${known.state.replace('pr_', '#')}</span>`;
+    }
+
+    const description = known.descriptor && known.descriptor.description
+      ? escape(known.descriptor.description)
+      : known.descriptor && known.descriptor.description_withheld
+        ? '<em>la yml la describe, pero la marca como interna</em>'
+        : catalog.runtime_inputs[path]
+          ? escape(catalog.runtime_inputs[path].summary)
+          : '<em>no existe en ninguna entidad registrada</em>';
+    const origin = known.identifier
+      ? escape(known.identifier)
+      : catalog.runtime_inputs[path]
+        ? 'entrada de runtime'
+        : 'sin origen';
+    resolved.source = resolved.source || known.source;
+    return `<tr>
+      <td><span class="path">${escape(path)}</span></td>
+      <td class="num">${formatValue(value)}</td>
+      <td>${tag}</td>
+      <td class="desc">${description}<br><span style="opacity:0.7">${origin}${resolved.source ? ' · ' + escape(resolved.source) : ''}</span></td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="card"><h3>Fact — qué lee, de dónde sale y con qué valor</h3>
+    <table><thead><tr><th>Fact</th><th style="text-align:right">Valor</th><th>Estado</th><th>Qué es</th></tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function valueAt(facts, path) {
+  return path.split('.').reduce((acc, key) => (acc == null ? acc : acc[key]), facts);
+}
+
+function formatValue(value) {
+  if (value == null) return '<span style="color:var(--red)">null</span>';
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'number') return Math.round(value * 100) / 100;
+  if (typeof value === 'object') return '—';
+  return escape(String(value));
+}
+
+function operationCard(answer, expression, row) {
+  const authored = expression
+    ? `<pre>${escape(expression)}</pre>${row.authored && row.authored.error ? `<p class="err">${escape(row.authored.error)}</p>${row.authored.hint ? `<p class="hint">${escape(row.authored.hint)}</p>` : ''}` : ''}`
+    : `<p class="err">El modelo no ha escrito ninguna expresión.</p>`;
+
+  return `<div class="card"><h3>Operación — la expresión</h3>
+    ${authored}
+    <h3 style="margin-top:14px">La que corre hoy en este contador</h3>
+    <pre style="opacity:0.75">${escape(canonicalExpression(counter))}</pre></div>`;
+}
+
+function engineCard(rows, current, expression) {
+  const maxValue = Math.max(...rows.flatMap((r) => [r.today.value || 0, (r.authored && r.authored.value) || 0]), 1);
+
+  const bars = rows.map((r) => {
+    const now = r.today.value || 0;
+    const next = r.authored && typeof r.authored.value === 'number' ? r.authored.value : null;
+    const down = next !== null && next < now;
+    return `<div class="barcol">
+      <div class="barpair">
+        <div class="bar now" style="height:${(now / maxValue) * 100}%" title="hoy: ${now}"></div>
+        ${next === null ? '' : `<div class="bar new ${down ? 'down' : ''}" style="height:${(next / maxValue) * 100}%" title="con la regla: ${next}"></div>`}
+      </div>
+      <div class="barlab">${r.label}</div>
+    </div>`;
+  }).join('');
+
+  const body = rows.map((r) => {
+    const next = r.authored;
+    const cell = !next ? '—' : next.error ? `<span class="err">no evalúa</span>` : round(next.value);
+    const delta = next && typeof next.value === 'number' ? round(next.value - r.today.value) : '';
+    return `<tr><td>${r.label}</td><td class="desc">${r.starts_on} → ${r.ends_on}</td>
+      <td class="num">${round(r.today.value)}</td><td class="num">${cell}</td><td class="num">${delta}</td></tr>`;
+  }).join('');
+
+  return `<div class="card"><h3>Engine — lo que acumularía este empleado</h3>
+    <div class="bars">${bars}</div>
+    <div class="legend"><span><span class="swatch" style="background:#30454f"></span>hoy</span><span><span class="swatch" style="background:var(--accent)"></span>con la regla nueva</span></div>
+    <table style="margin-top:12px"><thead><tr><th>Ciclo</th><th>Ventana</th><th style="text-align:right">Hoy</th><th style="text-align:right">Con la regla</th><th style="text-align:right">Diferencia</th></tr></thead><tbody>${body}</tbody></table>
+    <p class="hint">El número de hoy sale de la expresión canónica que el motor genera para este contador, con el mismo redondeo. Las 20 formas de redondeo están comprobadas contra el emisor de Ruby.</p></div>`;
+}
+
+const round = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);
+
+// --- wiring -----------------------------------------------------------------------
+
+for (const id of ['bind83', 'bind85']) {
+  document.getElementById(id).addEventListener('change', (e) => {
+    document.getElementById(id === 'bind83' ? 't83' : 't85').classList.toggle('on', e.target.checked);
+    if (lastAnswer) render(lastAnswer);
+  });
+}
+document.getElementById('run').addEventListener('click', run);
+document.getElementById('prompt').addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+});
+
+renderSidebar();
+renderEditor();
+</script>
+</body>
+</html>

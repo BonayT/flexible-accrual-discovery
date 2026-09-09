@@ -1,0 +1,3451 @@
+{
+  "generated_from": "backend/components/factor/registry_snapshot.yml + app/resources/**/*.yml",
+  "entity_count": 40,
+  "runtime_inputs": {
+    "allowance": {
+      "kind": "entity",
+      "entity": "timeoff.allowance",
+      "summary": "The counter being computed."
+    },
+    "active_days": {
+      "kind": "float",
+      "role": "accrual",
+      "summary": "Days active within the cycle; numerator of day proration."
+    },
+    "cycle_days": {
+      "kind": "float",
+      "role": "accrual",
+      "summary": "Total days in the cycle; the denominator."
+    },
+    "tenure_adjustment_units": {
+      "kind": "float",
+      "role": "tenure",
+      "summary": "The seniority bonus already sized, in the counter's unit."
+    },
+    "source_amount_units": {
+      "kind": "float",
+      "role": "base_entitlement",
+      "summary": "Pre-computed accrual for a by_worked_time counter; 0.0 otherwise."
+    },
+    "availability_fraction": {
+      "kind": "float",
+      "role": "accrual",
+      "summary": "Portion of the cycle available so far. Always 1.0 in production today."
+    },
+    "tenure_fraction": {
+      "kind": "float",
+      "role": "tenure",
+      "summary": "Proration of the tenure bonus for a mid-cycle milestone."
+    },
+    "hire_date": {
+      "kind": "date",
+      "role": "accrual",
+      "summary": "NOT the hire date: cycle.start_at, the contract start clipped to the cycle and the policy timeline."
+    },
+    "cycle_start_date": {
+      "kind": "date",
+      "role": "accrual",
+      "summary": "First day of the cycle being computed."
+    },
+    "cycle_end_date": {
+      "kind": "date",
+      "role": "accrual",
+      "summary": "Last day of the cycle being computed."
+    },
+    "tenure_date": {
+      "kind": "date",
+      "role": "tenure",
+      "summary": "Seniority origin; falls back to contract start, so always present."
+    }
+  },
+  "bindings": {
+    "today": {
+      "label": "Lo que llega hoy",
+      "entities": {
+        "allowance": "timeoff.allowance"
+      },
+      "scalars": [
+        "active_days",
+        "cycle_days",
+        "tenure_adjustment_units",
+        "source_amount_units",
+        "availability_fraction",
+        "tenure_fraction",
+        "hire_date",
+        "cycle_start_date",
+        "cycle_end_date",
+        "tenure_date"
+      ]
+    },
+    "pr_112683": {
+      "label": "Con #112683 — el contrato",
+      "entities": {
+        "contract": "contracts.contract_version"
+      },
+      "scalars": [],
+      "caveat": "The bound row is the REFERENCE contract, resolved today (Contracts::Repositories::ReferenceContracts), not the version in force during the cycle being computed. A mid-cycle change reads as its end state, and a recomputed past cycle reads as today."
+    },
+    "pr_112685": {
+      "label": "Con #112685 — el tramo de antigüedad",
+      "entities": {
+        "tenure": "timeoff.allowance_tenure_period"
+      },
+      "scalars": [],
+      "caveat": "The rung answers WHICH tier applies, never its amount: adjustment_in_cents is deliberately off the allowlist, so the bonus stays on its guarded path."
+    },
+    "discarded_facts": {
+      "label": "Los tres facts que ya se calculan y se tiran",
+      "entities": {},
+      "scalars": [
+        "tenure_years_at_period_start",
+        "tenure_months_at_period_start",
+        "absences_in_period"
+      ],
+      "caveat": "Computed on every evaluation in AccrualFactBuilder and never fed: three keys in the allowlist, no new read."
+    }
+  },
+  "eligibility_gate": {
+    "source": "backend/components/timeoff/app/services/timeoff/factor/counter_program_assignment.rb:33",
+    "conditions": [
+      "company feature DEV_FLEXIBLE_ACCRUAL_AUTHORITATIVE enabled",
+      "allowance.base_units? — a by_worked_time counter never qualifies",
+      "allowance.use_availability == all_days — any cadence disqualifies the counter"
+    ]
+  },
+  "landing_gaps": [
+    {
+      "area": "booking",
+      "note": "The booking gate re-runs legacy availability over the policy allowance and takes total_allowance from legacy; only .total is replaced. A rule that lowers the entitlement would still let people book against the legacy figure."
+    },
+    {
+      "area": "carry_over",
+      "note": "CalculateCycleCarryOver never consults Factor, so an assigned counter carries over legacy's number while showing CEL's balance all year."
+    }
+  ],
+  "entities": {
+    "api_core.company": {
+      "fields": {
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the company."
+        },
+        "legal_name": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The company's registered legal name, when it differs from the display name."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Display name of the company, as shown across Factorial."
+        }
+      },
+      "associations": {},
+      "source": "backend/components/api_core/app/resources/api_core/company.yml",
+      "description": "The company — the Factorial customer account (tenant). Every other record (employees, legal entities, expenses, …) belongs to exactly one company."
+    },
+    "attendance.edit_timesheet_request": {
+      "fields": {
+        "approved": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Tri-state approval status — true = approved, false = rejected, null = pending approval"
+        },
+        "attendance_shift_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Id of the shift for the request"
+        },
+        "clock_in": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Clock in of the shift"
+        },
+        "clock_out": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Clock out of the shift"
+        },
+        "date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date of the shift"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Id of the shift's employee"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier for the edit timesheet request"
+        },
+        "location_type": {
+          "type": "T.nilable(Attendance::Shift::LocationType)",
+          "nullable": true,
+          "described": true,
+          "description": "Location of the shift"
+        },
+        "observations": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Additional observations for the shift"
+        },
+        "reason": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Approve or reject reason"
+        },
+        "reference_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Reference date for the shift"
+        },
+        "request_type": {
+          "type": "Attendance::EditTimesheetRequest::RequestType",
+          "nullable": false,
+          "described": true,
+          "description": "What the request asks to do — one of `create_shift`, `update_shift`, `delete_shift`"
+        },
+        "workable": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Indicates if the shift is workable or a break"
+        }
+      },
+      "associations": {
+        "attendance_shift": {
+          "target": "attendance.shift",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The shift this request edits or deletes (null when the request creates a new shift)."
+        }
+      },
+      "source": "backend/components/attendance/app/resources/attendance/edit_timesheet_requests.yml",
+      "description": "An edit timesheet request — an employee's request to create, edit or delete a shift on their timesheet, going through an approval flow. Approval routing branches on its tri-state `approved` status and its `request_type`."
+    },
+    "attendance.employees_policy": {
+      "fields": {
+        "active_employee_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "IDs of the currently active (non-terminated) employees assigned to this policy"
+        },
+        "default": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether this is the default employees policy applied when employees are first added to attendance."
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Optional description explaining when to use this employees policy."
+        },
+        "employee_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "IDs of all employees assigned to this policy"
+        },
+        "enabled": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether this policy is currently active and can be assigned to employees."
+        },
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Unique identifier of the employees policy."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Human readable name of the employees policy."
+        }
+      },
+      "associations": {},
+      "source": "backend/components/attendance/app/resources/attendance/employees_policy.yml",
+      "description": "An attendance policy — a named configuration that groups employees under shared time-tracking settings (clock-in methods, overtime rules, tolerances, ...). One policy is the default applied to employees when they are first added to attendance."
+    },
+    "attendance.employees_setting": {
+      "fields": {
+        "accuracy": {
+          "type": "Attendance::EmployeesSetting::Accuracy",
+          "nullable": false,
+          "described": true,
+          "description": "Granularity worked time is tracked at — `seconds` or `minutes`."
+        },
+        "attendance_employees_policy_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Identifier of the employees policy this setting version belongs to."
+        },
+        "bank_of_hours_with_extra_hours": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether extra hours feed into the employee's bank-of-hours balance pool."
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Company this employees setting belongs to."
+        },
+        "desktop_clockin": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether employees can clock in and out from the web application."
+        },
+        "edit_timesheet_authorization": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether employees are allowed to request timesheet edits."
+        },
+        "effective_at": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date from which this setting version becomes effective for the affected employees (ISO 8601 date)."
+        },
+        "enable_breaks": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether breaks are enabled for employees under this setting."
+        },
+        "extra_hours_baseline": {
+          "type": "Attendance::EmployeesSetting::ExtraHoursBaseline",
+          "nullable": false,
+          "described": true,
+          "description": "Baseline used to calculate extra hours, either planned_hours or contract_hours."
+        },
+        "face_recognition": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether face recognition is required on shared devices to identify the employee."
+        },
+        "forced": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether this setting version was force-applied to the employee (overriding their policy default); the `reason` explains why."
+        },
+        "forgot_clock_out": {
+          "type": "Attendance::EmployeesSetting::ForgotClockOutOption",
+          "nullable": false,
+          "described": true,
+          "description": "Strategy used when employees forget to clock out. Supported values are disabled, missing_clock_out and clock_out_reminder."
+        },
+        "geofencing": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether clock‑ins are restricted to configured geofenced areas."
+        },
+        "geolocation": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether geolocation tracking is enabled when employees clock in and out."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the employees setting version."
+        },
+        "missing_clock_in_alert": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether alerts are sent when an expected clock‑in is missing."
+        },
+        "mobile_clockin": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether employees can clock in and out from the mobile application."
+        },
+        "overtime_authorization": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether employees need authorization for overtime worked under this setting."
+        },
+        "qr_code_clockin": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether employees can clock in and out using a shared device with QR codes."
+        }
+      },
+      "associations": {
+        "attendanceEmployeesPolicy": {
+          "target": "attendance.employees_policy",
+          "kind": "belongs_to",
+          "description": "The attendance policy this settings version belongs to."
+        }
+      },
+      "source": "backend/components/attendance/app/resources/attendance/employees_setting.yml",
+      "description": "A per-employee attendance settings version — the effective-dated configuration controlling how an employee tracks time, covering clock-in methods, geolocation/geofencing, breaks, overtime and timesheet-edit authorizations, tracking granularity and extra-hours rules. These are the policy flags time-tracking rules branch on."
+    },
+    "attendance.overtime_request": {
+      "fields": {
+        "approver_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "ID of the employee assigned to approve the request (null if unassigned)"
+        },
+        "author_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the employee who created the request"
+        },
+        "created_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "When the request was created"
+        },
+        "date": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "The day the overtime was (or will be) worked"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the overtime request"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the employee the overtime is for"
+        },
+        "hours_amount_in_cents": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Requested overtime amount in hundredths of an hour (e.g. 800 = 8 hours)"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the overtime request"
+        },
+        "reason": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Reason provided for the overtime"
+        },
+        "status": {
+          "type": "Attendance::Enums::OvertimeRequest::Status",
+          "nullable": false,
+          "described": true,
+          "description": "Approval status of the overtime request — one of `pending`, `approved`, `rejected`, `none`"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/attendance/app/resources/attendance/overtime_request.yml",
+      "description": "An overtime request — an employee's request to have worked overtime recognised for a given day, going through an approval flow. The time-tracking parallel to a leave request; approval routing branches on its status and amount."
+    },
+    "attendance.shift": {
+      "fields": {
+        "attendance_period_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "automatic_clock_in": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "automatic_clock_out": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "clock_in": {
+          "type": "T.nilable(Time)",
+          "nullable": true,
+          "described": true,
+          "description": "Time when the employee clocked in"
+        },
+        "clock_out": {
+          "type": "T.nilable(Time)",
+          "nullable": true,
+          "described": true,
+          "description": "Time when the employee clocked out"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Identifier for the company"
+        },
+        "created_at": {
+          "type": "Time",
+          "nullable": false,
+          "described": true,
+          "description": "Timestamp when the shift record was created"
+        },
+        "date": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "Date of the shift"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Identifier for the employee assigned to the shift"
+        },
+        "half_day": {
+          "type": "T.nilable(Attendance::Shift::HalfDayTypes)",
+          "nullable": true,
+          "described": true,
+          "description": "Which half of the day the shift covers when it is a half-day — `beginning_of_day` or `end_of_day`; null for full-day shifts"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier for the shift"
+        },
+        "in_source": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Source of the clock-in time"
+        },
+        "location_type": {
+          "type": "T.nilable(Attendance::Shift::LocationType)",
+          "nullable": true,
+          "described": true,
+          "description": "Type of location for the shift"
+        },
+        "observations": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Additional observations about the shift"
+        },
+        "out_source": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Source of the clock-out time"
+        },
+        "reference_date": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "The business day this shift is attributed to; can differ from `date` for overnight shifts that cross midnight"
+        },
+        "updated_at": {
+          "type": "Time",
+          "nullable": false,
+          "described": true,
+          "description": "Timestamp when the shift record was updated"
+        },
+        "workable": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether the shift counts as worked (workable) time rather than a break"
+        },
+        "workplace_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Identifier for the location"
+        }
+      },
+      "associations": {
+        "workplace": {
+          "target": "locations.location",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The workplace (office location) the shift was worked at, when set."
+        }
+      },
+      "source": "backend/components/attendance/app/resources/attendance/shift.yml",
+      "description": "A shift — one worked-time interval for an employee (a clock-in and clock-out on a given day), the atomic record of tracked attendance. Time-tracking rules branch on its dates, hours, whether it is `workable`, and how it was clocked."
+    },
+    "companies.legal_entity": {
+      "fields": {
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "company identifier"
+        },
+        "country": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Country code of the jurisdiction the legal entity is registered in (lowercase two-letter code, e.g. \"es\")."
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The currency code in ISO 4217 format"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "identifier of the legal entity"
+        },
+        "legal_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Legal name of the legal entity"
+        },
+        "main": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        }
+      },
+      "associations": {},
+      "source": "backend/components/companies/app/resources/companies/legal_entity.yml",
+      "description": "A legal entity of the company — a registered business entity with its own country, currency and legal name. Employees are contracted under a legal entity and finance records are booked against one; a company typically has one legal entity per country it operates in."
+    },
+    "compensations.concept": {
+      "fields": {
+        "category": {
+          "type": "T.nilable(Payroll::ValueObjects::ConceptCategory)",
+          "nullable": true,
+          "described": true,
+          "description": "The accounting category of the concept (e.g. `earnings_fixed_salary`, `deductions`)"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The company identifier of the concept"
+        },
+        "default": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the concept is a default or a custom concept"
+        },
+        "description": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The description of the concept"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The identifier of the concept"
+        },
+        "label": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The label of the concept"
+        },
+        "labor_cost": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The name of the concept"
+        },
+        "translated_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The translated name of the concept if it is a default concept."
+        },
+        "unit_name": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The name of the unit of the concept"
+        },
+        "unit_type": {
+          "type": "T.nilable(Payroll::ValueObjects::ConceptUnitType)",
+          "nullable": true,
+          "described": true,
+          "description": "What the concept's amount is measured in (e.g. `money`, a quantity of units)"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/compensations/app/resources/compensations/concept.yml",
+      "description": "A compensation concept — the type of pay item a compensation row is classified under (a fixed salary, a bonus, a deduction, ...), carrying its accounting category and unit. The thing compensation rules key on to decide how a row is treated."
+    },
+    "compensations.cycle": {
+      "fields": {
+        "alerts_day": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Day of the period on which alerts for the cycle are dispatched"
+        },
+        "closure_day": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Day of the period on which the cycle's runs close"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company that owns the cycle"
+        },
+        "country": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO country code the cycle applies to"
+        },
+        "currency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO 4217 currency code the cycle pays in"
+        },
+        "first_payment": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date of the first payment in the cycle"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the compensation cycle"
+        },
+        "people_group_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": false
+        },
+        "recurrence": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "How often the cycle recurs (e.g. `monthly`)"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/compensations/app/resources/compensations/cycles.yml",
+      "description": "A compensation cycle — a recurring payroll schedule (e.g. monthly) scoped to a country, currency and optional people group, that payroll runs are grouped under."
+    },
+    "compensations.employees_compensation": {
+      "fields": {
+        "amount_is_overwritten": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the amount is a manual override"
+        },
+        "amount_overwritten": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "amount_strategy_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "amount_strategy_type": {
+          "type": "Compensations::ValueObjects::AmountStrategyType",
+          "nullable": false,
+          "described": true,
+          "description": "Amount strategy discriminator"
+        },
+        "created_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "Timestamp when the compensation record was created"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Employee compensation id"
+        },
+        "payroll_concept_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Payroll concept id"
+        },
+        "payroll_run_employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Employee id (participant of the payroll run)"
+        },
+        "payroll_run_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Parent payroll run id"
+        },
+        "result_type": {
+          "type": "T.nilable(Compensations::ValueObjects::ResultType)",
+          "nullable": true,
+          "described": true,
+          "description": "Record projection type (always `compensation` on this endpoint)"
+        },
+        "source_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Source id (nullable — dashboard-created records have no source)"
+        },
+        "source_type": {
+          "type": "T.nilable(Compensations::ValueObjects::EmployeeCompensationSourceType)",
+          "nullable": true,
+          "described": true,
+          "description": "Source type discriminator (nullable — dashboard-created records have no source)"
+        },
+        "updated_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "Timestamp when the compensation record was last updated"
+        }
+      },
+      "associations": {
+        "payroll_run": {
+          "target": "compensations.payroll_run",
+          "kind": "belongs_to",
+          "description": "The payroll run this compensation record belongs to."
+        }
+      },
+      "source": "backend/components/compensations/app/resources/compensations/employees_compensations.yml",
+      "description": "An employee compensation record represents a single concept's amount entry for one employee within a specific payroll run — the granular input produced by an amount strategy, optionally overridden by a reviewer. Multiple entries for the same employee and concept can exist (e.g. one per source). For the final, aggregated amount per concept plus the payroll results the bookkeeper calculated for that payroll run, use `compensations/payroll_run_employees_compensation` instead."
+    },
+    "compensations.payroll_run": {
+      "fields": {
+        "alerts_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date when alerts are dispatched"
+        },
+        "closure_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Effective closure date (override if present, otherwise computed closure_date)"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Owning company id"
+        },
+        "cycle_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Parent cycle id (nil for off-cycle runs)"
+        },
+        "ends_on": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "End date of the run period"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Payroll run id"
+        },
+        "label": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Localized label for the run (month and year)"
+        },
+        "locked": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the run is locked"
+        },
+        "locked_at": {
+          "type": "T.nilable(Time)",
+          "nullable": true,
+          "described": true,
+          "description": "When the run was locked, if it is locked"
+        },
+        "payment_type": {
+          "type": "T.nilable(Compensations::ValueObjects::PaymentType)",
+          "nullable": true,
+          "described": true,
+          "description": "Payment type (regular / extra_pay)"
+        },
+        "starts_on": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "Start date of the run period"
+        },
+        "status": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Run status (open, in_review, completed, etc.)"
+        }
+      },
+      "associations": {
+        "cycle": {
+          "target": "compensations.cycle",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The compensation cycle this run belongs to (null for one-off runs)."
+        }
+      },
+      "source": "backend/components/compensations/app/resources/compensations/payroll_runs.yml",
+      "description": "A payroll run — the batch that compensates a set of employees for a period, moving through a lifecycle (open → completed) and lockable once finalised. Compensation rules and payroll conditions branch on its status, lock state and dates."
+    },
+    "contracts.compensation": {
+      "fields": {
+        "amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Value paid on each recurrence, stored in the smallest currency unit (for example cents). Required unless the compensation type is `undefined`"
+        },
+        "calculation": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Human-readable hint about the payroll formula used (for example \"current period\" or \"average of last 3 months\")"
+        },
+        "compensation_type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Required field. You can only use the following options: fixed, undefined, up_to, per_worked_day, per_worked_hour"
+        },
+        "contract_approval_status": {
+          "type": "Contracts::ContractVersion::Status",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "contract_version_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the contract version this compensation belongs to"
+        },
+        "contracts_taxonomy_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the contracts taxonomy categorising this compensation"
+        },
+        "currency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO 4217 currency code the amount is expressed in"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the compensation"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the compensation"
+        },
+        "recurrence": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Frequency (monthly, yearly, one_time) to determine how often the employee is paid. Could be empty, use `recurrence_count` in that case"
+        },
+        "starts_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date from which this compensation applies"
+        },
+        "unit": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "In which unit compensation is paid"
+        },
+        "yearly_equivalent_amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        }
+      },
+      "associations": {},
+      "source": "backend/components/contracts/app/resources/contracts/compensation.yml",
+      "description": "A compensation line on a contract version — one pay element (salary, bonus, allowance, ...) with its amount, unit, recurrence and currency. What compensation rules read to evaluate an employee's contractual pay."
+    },
+    "contracts.contract": {
+      "fields": {
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company that owns the contract"
+        },
+        "contract_type_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "ID of the country-specific contract-type record, when set"
+        },
+        "contract_type_type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Polymorphic type of the country-specific contract-type record, when set"
+        },
+        "country": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "ISO country code the contract is governed by"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "employee identifier"
+        },
+        "ends_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "contract end date"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "contract identifier"
+        },
+        "is_discontinuous": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether this is a discontinuous (intermittent) contract"
+        },
+        "legal_entity_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the legal entity the employee is contracted under"
+        },
+        "starts_on": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "contract start date"
+        }
+      },
+      "associations": {
+        "contract_versions": {
+          "target": "contracts.contract_version",
+          "kind": "has_many",
+          "description": "The versioned snapshots of this contract's terms over time."
+        },
+        "employee": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee who holds this contract."
+        },
+        "legal_entity": {
+          "target": "companies.legal_entity",
+          "kind": "belongs_to",
+          "description": "The legal entity the employee is contracted under."
+        },
+        "status": {
+          "target": "contracts.contract_status",
+          "kind": "has_one",
+          "description": "The contract's current lifecycle status (active / pausable / resumable)."
+        }
+      },
+      "source": "backend/components/contracts/app/resources/contracts/contracts.yml",
+      "description": "An employment contract held by an employee — the container under which versioned contract terms (salary, hours, dates) live. It has a start/end date, a country and legal entity, and may be discontinuous (intermittent)."
+    },
+    "contracts.contract_status": {
+      "fields": {
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the contract this status describes (shares the contract's id)"
+        },
+        "is_active": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the contract is currently active"
+        },
+        "is_pausable": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the contract can currently be paused"
+        },
+        "is_resumable": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the contract can currently be resumed"
+        }
+      },
+      "associations": {
+        "contract": {
+          "target": "contracts.contract",
+          "kind": "belongs_to",
+          "description": "The contract this status describes."
+        }
+      },
+      "source": "backend/components/contracts/app/resources/contracts/contract_status.yml",
+      "description": "The lifecycle status of a contract — whether it is currently active, and whether it can be paused or resumed. Keyed by (and sharing) the contract's id."
+    },
+    "contracts.contract_version": {
+      "fields": {
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "identifier for company."
+        },
+        "contract_status_is_active": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "contracts_contract_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "country": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "nationality country code of the employee (Spain ES, United Kingdom GB)."
+        },
+        "created_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "the date the contract version was created."
+        },
+        "effective_on": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "the day the specific contract starts, in case of hiring the same than starts_on."
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "employee identifier, refers to /employees/employees endpoint."
+        },
+        "ends_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "the day the employee is terminated. It has nothing to do with trial period, these are concepts totally unrelated."
+        },
+        "has_payroll": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "boolean that indicates if the employee asociated to this contract belongs to a payroll policy."
+        },
+        "has_trial_period": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "a flag that indicates if the contract version has ever had a trial period."
+        },
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "identifier for the contract version."
+        },
+        "is_discontinuous": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "is_reference": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "job_catalog_level_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "job catalog level identifier, refers to /job_catalog/levels endpoint."
+        },
+        "job_catalog_role_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "job_catalog_tree_node_uuid": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "the uuid node in the job catalog tree. For now it only supports level nodes. From this point in the job catalog tree you can get the full ancestor path to the root node including the role. Refer to job_catalog/tree_nodes endpoint."
+        },
+        "job_title": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "job title of the employee."
+        },
+        "salary_amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "the amount of money the employee earns in cents. When adding a salary to a contract that previously had none, both salary_amount and salary_frequency must be provided together."
+        },
+        "salary_frequency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "the frequency of the salary payment."
+        },
+        "starts_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "the day the employee is hired."
+        },
+        "status": {
+          "type": "Contracts::ContractVersion::Status",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "trial_period_ends_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "when the trial period ends. If there is no date, it means that the employee has never been in trial. This date is not related with the end date of a contract."
+        },
+        "updated_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "the date of the last contract version updated."
+        },
+        "working_hours": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "the amount of hours the employee works."
+        },
+        "working_hours_frequency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "the frequency of the working hours."
+        },
+        "working_time_percentage_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Working time percentage in cents (e.g., when an employee is working part-time, the percentage of full-time hours they are working)."
+        },
+        "working_week_days": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "the days of the week the employee works."
+        }
+      },
+      "associations": {
+        "contract": {
+          "target": "contracts.contract",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The contract this version is a snapshot of."
+        },
+        "employee": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee this contract version belongs to."
+        },
+        "job_catalog_level": {
+          "target": "job_catalog.level",
+          "kind": "belongs_to",
+          "description": "The job catalog level (role + seniority) this contract version places the employee at."
+        }
+      },
+      "source": "backend/components/contracts/app/resources/contracts/contract_version.yml",
+      "description": "A contract version — a versioned, effective-dated snapshot of an employee's contract terms (salary, working hours, job title, leveling, trial period, dates). The current terms are the version flagged `is_reference`. The core record contract and compensation rules read."
+    },
+    "contracts.termination_type": {
+      "fields": {
+        "country": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO country code this termination type applies to when country-specific (null for global types)"
+        },
+        "description": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Human-readable description of the termination type"
+        },
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Unique identifier of the termination type"
+        },
+        "is_deprecated": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether this termination type is deprecated and should no longer be chosen"
+        },
+        "slug": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Stable machine-readable key for the termination type"
+        },
+        "termination_reason_type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Higher-level reason category this type rolls up to (e.g. voluntary, involuntary)"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/contracts/app/resources/contracts/termination_type.yml",
+      "description": "A termination type — a kind of employment termination chosen when offboarding an employee (e.g. voluntary resignation, dismissal), optionally scoped to a country."
+    },
+    "cost_centers.assignment": {
+      "fields": {
+        "cost_center_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the cost center this assignment allocates to"
+        },
+        "end_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date the allocation stops being effective, if any (null means open-ended)"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the assignment"
+        },
+        "is_default": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether this is the resource's default cost center assignment"
+        },
+        "percentage": {
+          "type": "Float",
+          "nullable": false,
+          "described": true,
+          "description": "Share of the resource's cost allocated to this cost center, as a percentage (0–100)"
+        },
+        "resource_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the assigned resource, of the type given by resource_type"
+        },
+        "resource_type": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Type of the assigned resource (the assignable), e.g. \"Employee\""
+        },
+        "start_date": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "Date from which this allocation is effective"
+        }
+      },
+      "associations": {
+        "costCenter": {
+          "target": "cost_centers.cost_center",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The cost center this assignment allocates the resource to."
+        }
+      },
+      "source": "backend/components/cost_centers/app/resources/cost_centers/assignment.yml",
+      "description": "A cost center assignment — one allocation row tying an assignable resource (e.g. an employee, identified by the `resource_type`/`resource_id` pair) to a cost center for a date range, at a given percentage. How much of a resource's cost is charged to a cost center over time is expressed as these rows."
+    },
+    "cost_centers.cost_center": {
+      "fields": {
+        "code": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Short accounting code identifying the cost center"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company this cost center belongs to"
+        },
+        "deactivation_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date the cost center was (or will be) deactivated, if any"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the cost center"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the cost center"
+        },
+        "legal_entity_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "ID of the legal entity this cost center is scoped to (null for company-wide cost centers)"
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Human-readable name of the cost center"
+        },
+        "status": {
+          "type": "CostCenters::ValueObjects::CostCenterStatus",
+          "nullable": false,
+          "described": true,
+          "description": "Lifecycle status of the cost center — \"active\" or \"inactive\""
+        }
+      },
+      "associations": {
+        "assignments": {
+          "target": "cost_centers.assignment",
+          "kind": "has_many",
+          "description": "The allocation rows tying resources (employees, …) to this cost center for a date range and percentage."
+        },
+        "company": {
+          "target": "api_core.company",
+          "kind": "belongs_to",
+          "description": "The company (tenant) this cost center belongs to."
+        },
+        "legalEntity": {
+          "target": "companies.legal_entity",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The legal entity this cost center is scoped to — its jurisdiction (country) and accounting currency. Null for company-wide cost centers."
+        }
+      },
+      "source": "backend/components/cost_centers/app/resources/cost_centers/cost_center.yml",
+      "description": "A cost center — an accounting bucket that spend (expenses, payroll, …) is charged to, scoped to a legal entity and identified by a code. Approval and policy rules branch on which cost center is being charged, on its status (spend against an inactive one is suspicious) or on the legal entity it belongs to."
+    },
+    "employees.employee": {
+      "fields": {
+        "access_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "access_id associated to the employee."
+        },
+        "active": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "status of the employee, true when active, false when terminated."
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "id of the company to which the employee belongs (not editable)."
+        },
+        "first_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "name of the employee."
+        },
+        "full_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "full name of the employee."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "id of the employee."
+        },
+        "is_terminating": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "is the employee being terminated?"
+        },
+        "last_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "last name of the employee."
+        },
+        "legal_entity_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "legal entity of the employee, references to companies/legal_entities."
+        },
+        "location_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "location id of the employee, references to locations/locations."
+        },
+        "manager_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "manager id of the employee, you can get the manager id from employees endpoint."
+        },
+        "team_ids": {
+          "type": "T.nilable(T::Array[Integer])",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "terminated_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "termination date of the employee."
+        }
+      },
+      "associations": {
+        "company": {
+          "target": "api_core.company",
+          "kind": "belongs_to",
+          "description": "The company (tenant) the employee belongs to."
+        },
+        "contractVersions": {
+          "target": "contracts.contract_version",
+          "kind": "has_many",
+          "description": "The employee's contract versions over time. The current terms are the one flagged `is_reference`; use to read contractual salary, hours, job title and leveling."
+        },
+        "default_location": {
+          "target": "locations.location",
+          "kind": "belongs_to",
+          "description": "The employee's primary workplace — the office location they are based at, carrying its jurisdiction (country, timezone). Used to route or branch on where the employee works."
+        },
+        "leaves": {
+          "target": "timeoff.leave",
+          "kind": "has_many",
+          "description": "The employee's time off leave requests (across all statuses). Use to branch on their absences — e.g. whether they have approved leave overlapping a date."
+        },
+        "legalEntity": {
+          "target": "companies.legal_entity",
+          "kind": "belongs_to",
+          "description": "The legal entity the employee is contracted under — their employer of record, carrying jurisdiction (country) and currency."
+        },
+        "manager": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee's direct manager in the reporting line (self-referential — chain hops for skip-level escalation). Null for employees at the top of the hierarchy."
+        },
+        "memberships": {
+          "target": "teams.membership",
+          "kind": "has_many",
+          "description": "The team memberships placing this employee on teams, each carrying whether they are a lead of that team. Use to inspect the employee's teams or whether they lead any."
+        },
+        "reports": {
+          "target": "employees.employee",
+          "kind": "has_many"
+        },
+        "terminationType": {
+          "target": "contracts.termination_type",
+          "kind": "belongs_to",
+          "description": "The reason the employee was terminated, when they have been offboarded (null for active employees)."
+        },
+        "timeoffPolicyAssignments": {
+          "target": "timeoff.policy_assignment",
+          "kind": "has_many",
+          "description": "The employee's time off policy assignments over time, each linking them to a policy with effective dates. Use to resolve which time off policy governs the employee."
+        }
+      },
+      "source": "backend/components/employees/app/resources/employees/employee.yml",
+      "description": "An employee of the company — their identity, organisational placement (manager, teams, location, legal entity) and lifecycle (active, terminating, terminated). The central record the rest of the HR data hangs off."
+    },
+    "expenses.expensable": {
+      "fields": {
+        "amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional amount in cents"
+        },
+        "budget_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the budget this expensable draws from, when one is linked"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the company that owns the expensable"
+        },
+        "cost_center_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "The IDs of the cost centers the expensable's cost is allocated to"
+        },
+        "created_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "The date and time when the expensable was created"
+        },
+        "creation_source": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The currency code in ISO 4217 format"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional description of the expensable"
+        },
+        "effective_on": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional date and time when the expensable was effective"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the employee that owns the expensable"
+        },
+        "expense_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the receipt-backed expense detail record; set only when `type` is \"expense\""
+        },
+        "group_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the expense report (group of expensables submitted together) this expensable was submitted in, if any"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier for the expensable"
+        },
+        "internal_reference": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional internal reference of the expensable"
+        },
+        "legal_entity_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional ID of the legal entity that the expensable belongs to"
+        },
+        "mileage_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the mileage claim detail record; set only when `type` is \"mileage\""
+        },
+        "per_diem_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the per-diem allowance detail record; set only when `type` is \"perdiem\""
+        },
+        "project_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the project this expensable is charged to, when one is linked"
+        },
+        "reimbursable_amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional reimbursable amount in cents"
+        },
+        "reimbursable_currency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional reimbursable currency code in ISO 4217 format"
+        },
+        "reporter_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional ID of the employee that reported the expensable"
+        },
+        "review_request_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional date and time when the expensable was requested for review"
+        },
+        "status": {
+          "type": "Expenses::Entities::ExpensableStatus",
+          "nullable": false,
+          "described": true,
+          "description": "The lifecycle status of the expensable in the review/payment flow"
+        },
+        "type": {
+          "type": "Expenses::Entities::ExpensableResourceType",
+          "nullable": false,
+          "described": true,
+          "description": "Type of the expensable. Can be either \"expense\" or \"mileage\" or \"perdiem\""
+        }
+      },
+      "associations": {
+        "company": {
+          "target": "api_core.company",
+          "kind": "belongs_to",
+          "description": "The company (tenant) the expensable belongs to."
+        },
+        "expensable_group": {
+          "target": "expenses.expensable_group",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The expense report (group of expensables submitted and reviewed together, e.g. a trip) this expensable belongs to, when it was submitted as part of one."
+        },
+        "expense_detail": {
+          "target": "expenses.expense",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The receipt-backed detail record (merchant, category, document). Present only when `type` is \"expense\"; null for mileage and per-diem expensables."
+        },
+        "legal_entity": {
+          "target": "companies.legal_entity",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The legal entity the expensable is booked against; carries the jurisdiction (country) and accounting currency that company policy rules usually key on."
+        },
+        "mileage_detail": {
+          "target": "expenses.mileage",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The mileage claim detail record (distance, rate, route, round trip). Present only when `type` is \"mileage\"; null otherwise."
+        },
+        "owner": {
+          "target": "employees.employee",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The employee whose spend this is — the person to be reimbursed and whose reporting line approvals typically follow."
+        },
+        "per_diem_detail": {
+          "target": "expenses.per_diem",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The per-diem (daily allowance) detail record (trip dates, origin/destination). Present only when `type` is \"perdiem\"; null otherwise."
+        },
+        "project": {
+          "target": "project_management.project",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The project this expensable is charged to, when the spender linked one (e.g. to decide whether the cost is client-billable)."
+        },
+        "reporter": {
+          "target": "employees.employee",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The employee who submitted the expensable on the owner's behalf (delegated submission, e.g. an assistant). Null when the owner submitted it themselves."
+        }
+      },
+      "source": "backend/components/expenses/app/resources/expenses/expensable.yml",
+      "description": "Represents an expensable resource — the header record every employee expense submission goes through, regardless of kind. It can be a regular (receipt-backed) expense, a mileage claim, or a per-diem allowance; the `type` field discriminates, and the matching detail record carries the kind-specific data."
+    },
+    "expenses.expensable_group": {
+      "fields": {
+        "amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The total amount in cents across all expensables in the report."
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the company that owns the expense report."
+        },
+        "currency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The currency code in ISO 4217 format of the report totals."
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The optional free-text description of the expense report."
+        },
+        "employee_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the employee that owns the expense report — the person whose expensables are bundled in it."
+        },
+        "expensables_count": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Number of expensables bundled in the report."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the expense report."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Name of the expense report, given by the employee (e.g. the trip or event it covers)."
+        },
+        "reimbursable_amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The total reimbursable amount in cents across all expensables in the report."
+        },
+        "status": {
+          "type": "Expenses::Entities::ExpensableStatus",
+          "nullable": false,
+          "described": true,
+          "description": "The lifecycle status of the expense report in the review/payment flow, derived from its expensables."
+        }
+      },
+      "associations": {
+        "owner": {
+          "target": "employees.employee",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The employee who owns the expense report — the person whose expensables are bundled in it."
+        }
+      },
+      "source": "backend/components/expenses/app/resources/expenses/expensable_group.yml",
+      "description": "An expense report — a group of expensables submitted and reviewed together as a single unit (typically all the expenses of one trip, event or period), owned by one employee."
+    },
+    "expenses.expense": {
+      "fields": {
+        "amount": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The total amount in cents"
+        },
+        "category_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The id of the expense category the expense is classified under (company-configurable catalogue)"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The id of the expense's company"
+        },
+        "creation_type": {
+          "type": "Expenses::Entities::ExpenseCreationType",
+          "nullable": false,
+          "described": true,
+          "description": "How the expense was created, one of 'manual', 'automatic' or 'travelperk'"
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The currency of the expense"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The description of the expense"
+        },
+        "document_number": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Number of the financial document associated to the expense"
+        },
+        "effective_on": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "The date when the expense was made"
+        },
+        "employee_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The id of the expense's owner"
+        },
+        "expenses_expensable_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The id of the expensable"
+        },
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The id of the expense"
+        },
+        "merchant_name": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The name of the merchant"
+        },
+        "reference": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The reference of the expense"
+        },
+        "status": {
+          "type": "Expenses::Entities::ExpensableStatus",
+          "nullable": false,
+          "described": true,
+          "description": "The lifecycle status of the expense in the review/payment flow"
+        },
+        "subcategory": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The subcategory of the expense"
+        },
+        "user_merchant": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The merchant name as typed by the employee, when they corrected or filled it manually (takes precedence over the extracted `merchant_name`)"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/expenses/app/resources/expenses/expense.yml",
+      "description": "A regular (receipt-backed) expense — the detail record behind an expensable of type \"expense\", carrying the purchase data — merchant, category, amount and the supporting document."
+    },
+    "expenses.mileage": {
+      "fields": {
+        "amount": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The amount in cents"
+        },
+        "category_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the category"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the company that owns the mileage"
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The currency code in ISO 4217 format"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The description of the mileage"
+        },
+        "effective_on": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The date when the mileage was effective"
+        },
+        "employee_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the employee that owns the mileage"
+        },
+        "expenses_expensable_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the expensable associated with this mileage"
+        },
+        "from": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The origin location"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier for the mileage"
+        },
+        "mileage": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The distance travelled, expressed in `units`"
+        },
+        "rate": {
+          "type": "T.nilable(BigDecimal)",
+          "nullable": true,
+          "described": true,
+          "description": "The reimbursement rate per distance unit, in `currency`"
+        },
+        "round_trip": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Indicates if the mileage is a round trip"
+        },
+        "status": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The status of the mileage"
+        },
+        "subcategory": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The subcategory of the mileage"
+        },
+        "to": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The destination location"
+        },
+        "units": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The distance unit `mileage` is expressed in (e.g. km)"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/expenses/app/resources/expenses/mileage.yml",
+      "description": "A mileage claim — the detail record behind an expensable of type \"mileage\", reimbursing distance driven on company business (route, distance, rate per unit)."
+    },
+    "expenses.per_diem": {
+      "fields": {
+        "amount": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The total allowance amount in cents."
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the company the per diem is for."
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The currency code in ISO 4217 format."
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The description of the per diem."
+        },
+        "effective_on": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The date the per diem is effective on."
+        },
+        "employee_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the employee the per diem is for."
+        },
+        "end_date": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The last day of the trip the allowance covers."
+        },
+        "expenses_expensable_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The ID of the expensable the per diem is for."
+        },
+        "from": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The location the per diem is from."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The ID of the per diem."
+        },
+        "project_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The id of the project associated with this per diem"
+        },
+        "start_date": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The first day of the trip the allowance covers."
+        },
+        "status": {
+          "type": "Expenses::Entities::ExpensableStatus",
+          "nullable": false,
+          "described": true,
+          "description": "The status of the per diem."
+        },
+        "subcategory": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The subcategory of the per diem."
+        },
+        "to": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The location the per diem is to."
+        },
+        "trip_name": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The name of the trip."
+        }
+      },
+      "associations": {},
+      "source": "backend/components/expenses/app/resources/expenses/per_diem.yml",
+      "description": "A per-diem allowance — the detail record behind an expensable of type \"perdiem\", covering a fixed daily allowance for the days of a business trip instead of itemised receipts."
+    },
+    "finance.financial_document": {
+      "fields": {
+        "archived_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "created_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "currency": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO 4217 code of the currency the document is issued in, such as EUR or USD. Every amount on the document is expressed in it, so comparing amounts across documents without checking this is unsafe."
+        },
+        "discount_percentage": {
+          "type": "T.nilable(Float)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "document_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date the issuer put on the document. Distinct from `created_at`, which is when it reached Factorial; a document can arrive weeks after it was issued."
+        },
+        "document_number": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Number the issuer printed on the document; for a purchase, the vendor's own invoice number. Not a Factorial identifier: on a purchase it is only unique per vendor, so the same number can legitimately appear on documents from two different vendors."
+        },
+        "document_type": {
+          "type": "Finance::ValueObjects::FinancialDocumentType",
+          "nullable": false,
+          "described": true,
+          "description": "One of `invoice`, `receipt` or `credit_note`. A document generated from an expense is typed automatically and can flip between `receipt` and `invoice` when the employee edits the expense."
+        },
+        "due_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Date the payment falls due, as stated on the document."
+        },
+        "fully_reconciled_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "When the document was fully matched against bank transactions. Null while any part of it remains unreconciled."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Factorial unique identifier for the financial document."
+        },
+        "legal_entity_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Factorial unique identifier for the legal entity of the financial document."
+        },
+        "net_amount_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Sum of the line items before taxes, in cents. Use `total_amount_cents` for what is actually payable."
+        },
+        "operation_type": {
+          "type": "Finance::ValueObjects::FinancialDocumentOperationType",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "reconcilable": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "recorded_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "When the document was posted to accounting. Only possible once `validated_at` is set."
+        },
+        "status": {
+          "type": "Finance::ValueObjects::InvoiceStatus",
+          "nullable": false,
+          "described": true,
+          "description": "Where the document stands on its way to being paid: `processing` while it is still being prepared, `review` while it awaits review (the value is `review`, never `pending`), `sent_to_pay` once it has been sent for payment, and `paid`. This is not an approval state: a document generated from an employee expense is created already `paid`, because the money left before Factorial ever saw it."
+        },
+        "taxes_total_amount_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Sum of every tax charged on the document, in cents."
+        },
+        "total_amount_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Total payable on the document, taxes included, in cents. This is the amount to branch on when a rule cares about how much is being spent."
+        },
+        "validated_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "When a person confirmed the document data is correct. Validation is what unlocks recording and payment; it is not an approval decision, and says nothing about whether the spend was authorised."
+        },
+        "validated_by_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Factorial unique identifier of the employee who validated the document."
+        },
+        "vendor_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Factorial unique identifier for the vendor of the financial document."
+        }
+      },
+      "associations": {
+        "financial_document_associations": {
+          "target": "finance.financial_document_association",
+          "optional": true,
+          "kind": "has_many",
+          "description": "Every resource this document is linked to, one row per link, discriminated by `resource_type` (purchaseorder, project, subproject, expense, softwaresetup, quote). Use it to tell what an invoice belongs to."
+        }
+      },
+      "source": "backend/components/finance/app/resources/finance/financial_document.yml",
+      "description": "Financial Document is a document that represents a financial transaction. Could be an invoice, a credit note or receipt."
+    },
+    "finance.financial_document_association": {
+      "fields": {
+        "financial_document_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Factorial unique identifier of the financial document being linked."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Factorial unique identifier for the link itself."
+        },
+        "resource_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Factorial unique identifier of the linked resource. Only meaningful together with `resource_type`, since ids are unique per type and not across types."
+        },
+        "resource_type": {
+          "type": "Finance::Entities::ResourceType",
+          "nullable": false,
+          "described": true,
+          "description": "Which kind of resource the document is linked to. One of `purchaseorder`, `expense`, `softwaresetup`, `project`, `subproject` or `quote`. Compare against these values: the underlying column stores an internal class name instead, so comparing against something like `Procurement::PurchaseOrder` matches nothing."
+        }
+      },
+      "associations": {},
+      "source": "backend/components/finance/app/resources/finance/financial_document_association.yml",
+      "description": "One link between a financial document and something it belongs to: a purchase order, project, subproject, expense, software setup or quote. A document can carry several links, including several of the same type (an invoice covering two purchase orders has two rows here)."
+    },
+    "holidays.company_holiday": {
+      "fields": {
+        "date": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "Company holiday date"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Company holiday description"
+        },
+        "half_day": {
+          "type": "T.nilable(Holidays::CompanyHoliday::HalfDayTypes)",
+          "nullable": true,
+          "described": true,
+          "description": "If the company holiday is half-day and which part of the day"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Company holiday id"
+        },
+        "location_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Related location id"
+        },
+        "summary": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Company holiday summary"
+        }
+      },
+      "associations": {
+        "location": {
+          "target": "locations.location",
+          "kind": "belongs_to"
+        }
+      },
+      "source": "backend/components/holidays/app/resources/holidays/company_holiday.yml",
+      "description": "Company holidays"
+    },
+    "job_catalog.level": {
+      "fields": {
+        "archived": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether this level is archived."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "identifier for the job catalog level."
+        },
+        "is_default": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Shows if the level is the default one."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Level name."
+        },
+        "order": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Sort order of the level within its role (lower is more junior)."
+        },
+        "role_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "identifier for the job catalog role."
+        },
+        "role_name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Role name."
+        }
+      },
+      "associations": {
+        "role": {
+          "target": "job_catalog.role",
+          "kind": "belongs_to",
+          "description": "The role this level belongs to."
+        },
+        "salary_ranges": {
+          "target": "job_catalog.salary_range",
+          "kind": "has_many",
+          "description": "The compensation bands defined for this level."
+        }
+      },
+      "source": "backend/components/job_catalog/app/resources/job_catalog/levels.yml",
+      "description": "A job catalog level — a seniority step within a role (e.g. Junior, Senior), ordered, with its own salary ranges. What leveling rules and compensation bands key on."
+    },
+    "job_catalog.role": {
+      "fields": {
+        "archived": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Shows if the role is archived."
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Identifier for the company."
+        },
+        "competencies_ids": {
+          "type": "T.nilable(T::Array[Integer])",
+          "nullable": true,
+          "described": true,
+          "description": "List of competencies."
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Role description."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "identifier for the job catalog role."
+        },
+        "legal_entities_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "List of legal entities."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Role name."
+        },
+        "supervisors_ids": {
+          "type": "T.nilable(T::Array[Integer])",
+          "nullable": true,
+          "described": true,
+          "description": "List of supervisors."
+        }
+      },
+      "associations": {
+        "levels": {
+          "target": "job_catalog.level",
+          "kind": "has_many",
+          "description": "The seniority levels this role can be performed at."
+        }
+      },
+      "source": "backend/components/job_catalog/app/resources/job_catalog/roles.yml",
+      "description": "A job catalog role — a named job (e.g. CFO, Software Engineer) in the company's job architecture, holding the seniority levels it can be performed at and the legal entities it applies to."
+    },
+    "job_catalog.salary_range": {
+      "fields": {
+        "amount_type": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "What the band amounts represent (e.g. gross, net)"
+        },
+        "currency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "ISO 4217 currency code the band is expressed in"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the salary range"
+        },
+        "legal_entities_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "IDs of the legal entities this band applies to"
+        },
+        "level_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the job catalog level this band applies to"
+        },
+        "max_range": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Upper bound of the salary band, in the band's currency"
+        },
+        "min_range": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Lower bound of the salary band, in the band's currency"
+        },
+        "salary_frequency": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Frequency the band amounts are expressed at (e.g. yearly, monthly)"
+        }
+      },
+      "associations": {
+        "level": {
+          "target": "job_catalog.level",
+          "kind": "belongs_to",
+          "description": "The level this salary range applies to."
+        }
+      },
+      "source": "backend/components/job_catalog/app/resources/job_catalog/salary_range.yml",
+      "description": "A job catalog salary range — the compensation band (min/max) defined for a level, per currency and legal entity. What pay-equity and compensation rules compare an employee's pay against."
+    },
+    "locations.location": {
+      "fields": {
+        "city": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "City the workplace is located in"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company this workplace belongs to"
+        },
+        "country": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "ISO country code of the workplace — the jurisdiction it sits in, often used for country-specific policy thresholds"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the workplace"
+        },
+        "main": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether this is the company's main (HQ) workplace"
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Human-readable name of the workplace (e.g. \"Barcelona Office\")"
+        },
+        "postal_code": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Postal/ZIP code of the workplace address"
+        },
+        "state": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "State or province the workplace is located in"
+        },
+        "timezone": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "IANA timezone the workplace operates in (e.g. \"Europe/Madrid\")"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/locations/app/resources/locations/location.yml",
+      "description": "A workplace (office location) of the company — its name, jurisdiction (country, timezone) and address. Every employee has a default workplace, so it is the org-placement dimension that policy and approval rules use to branch on where someone works (e.g. country-specific thresholds, HQ vs satellite handling)."
+    },
+    "project_management.project": {
+      "fields": {
+        "client_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "The client of the project, refers to finance/contacts."
+        },
+        "code": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The code of the project"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The description of the project"
+        },
+        "due_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "The end date of the project"
+        },
+        "employees_assignment": {
+          "type": "ProjectManagement::Project::EmployeesAssignment",
+          "nullable": false,
+          "described": true,
+          "description": "How employees get access to the project — `manual` (hand-picked members) or `company` (everyone in the company)"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The id of the project"
+        },
+        "is_billable": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the project's costs can be billed (recharged) to a client"
+        },
+        "legal_entity_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The legal entity id of the project"
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "The name of the project"
+        },
+        "start_date": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "The start date of the project"
+        },
+        "status": {
+          "type": "ProjectManagement::Project::Status",
+          "nullable": false,
+          "described": true,
+          "description": "The lifecycle status of the project (whether it is still running and can take new charges)"
+        }
+      },
+      "associations": {
+        "legalEntity": {
+          "target": "companies.legal_entity",
+          "kind": "belongs_to",
+          "description": "The legal entity that owns the project (jurisdiction and accounting currency for the project's costs)."
+        }
+      },
+      "source": "backend/components/project_management/app/resources/project_management/projects.yml",
+      "description": "A project of the company — a named initiative (internal or for a client) that time and costs are tracked against. Expenses, time records and budgets can be charged to a project; billable projects recharge those costs to a client."
+    },
+    "teams.membership": {
+      "fields": {
+        "company_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Company ID of the membership"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Employee ID of the membership"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Membership ID"
+        },
+        "lead": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the employee is a lead of the team or not"
+        },
+        "team_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Team ID of the membership"
+        }
+      },
+      "associations": {
+        "employee": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee this membership places on the team."
+        },
+        "team": {
+          "target": "teams.team",
+          "optional": true,
+          "kind": "belongs_to",
+          "description": "The team this membership places the employee on."
+        }
+      },
+      "source": "backend/components/teams/app/resources/teams/membership.yml",
+      "description": "A team membership — the join record placing one employee on one team, with a `lead` flag marking whether they lead that team. The row policy and approval rules read to know who belongs to which team and who its leads are."
+    },
+    "teams.team": {
+      "fields": {
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company this team belongs to"
+        },
+        "depth": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the team"
+        },
+        "employee_ids": {
+          "type": "T.nilable(T::Array[Integer])",
+          "nullable": true,
+          "described": true,
+          "description": "IDs of the employees who are members of this team"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the team"
+        },
+        "lead_ids": {
+          "type": "T.nilable(T::Array[Integer])",
+          "nullable": true,
+          "described": true,
+          "description": "IDs of the employees who are leads of this team (subset of employee_ids)"
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Human-readable name of the team (e.g. \"Engineering\")"
+        }
+      },
+      "associations": {
+        "memberships": {
+          "target": "teams.membership",
+          "kind": "has_many",
+          "description": "The membership rows joining employees to this team, each carrying whether that employee is a lead. Use to inspect or count the team's members."
+        }
+      },
+      "source": "backend/components/teams/app/resources/teams/team.yml",
+      "description": "A team in the company's org chart — a named group employees belong to (through memberships), optionally with one or more leads and nested under a parent team. It is the grouping dimension policy and approval rules use to route by team or to treat team leads specially."
+    },
+    "timeoff.allowance": {
+      "fields": {
+        "allowance_type": {
+          "type": "Timeoff::Allowance::AllowanceType",
+          "nullable": false,
+          "described": true,
+          "description": "Sets the allowance units. Can be \"days\" or \"hours\""
+        },
+        "cycle_length": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "How many months does each allowance cycle last"
+        },
+        "cycle_start": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "When does the cycle start."
+        },
+        "frequency": {
+          "type": "T.nilable(Timeoff::Allowances::Frequency)",
+          "nullable": true,
+          "described": true,
+          "description": "Defines duration of the allowance cycles. Can be \"yearly\", \"monthly_flexible\" or \"lifetime\""
+        },
+        "holiday_allowance_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Base amount of holiday allowance units multiplied by 100"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the allowance"
+        },
+        "proration_type": {
+          "type": "Timeoff::Allowance::ProrationType",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the allowance has proration enabled or not."
+        },
+        "rounding": {
+          "type": "Timeoff::Allowance::Roundings",
+          "nullable": false,
+          "described": true,
+          "description": "How the accrued units of the allowance are rounded. It depends if the allowance is set in hours or days."
+        },
+        "rounding_approximation": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "source_units": {
+          "type": "T.nilable(Timeoff::Allowances::SourceUnits)",
+          "nullable": true,
+          "described": true,
+          "description": "This field configures the type of allowance (fixed balance, based on worked time)"
+        },
+        "tenure_period_transition": {
+          "type": "T.nilable(Timeoff::Allowances::TenurePeriodTransition)",
+          "nullable": true,
+          "described": true,
+          "description": "In case the allowance has tenure periods, when is this tenure applied."
+        },
+        "tenure_periods_enabled": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether the allowance has tenure periods enabled or not."
+        },
+        "timeoff_cycle": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Value to indicate how the allowance cycle is configured. Its an abbreviation of the first and last month."
+        },
+        "timeoff_policy_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The Id of the policy to which the allowance belongs to"
+        }
+      },
+      "associations": {},
+      "source": "backend/components/timeoff/app/resources/timeoff/allowance.yml",
+      "description": "An Allowance represents how a Time off counter accrues and deducts days."
+    },
+    "timeoff.leave": {
+      "fields": {
+        "accrues": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "approved": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Tri-state approval status — true = approved, false = rejected, null = pending approval"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company the leave belongs to"
+        },
+        "created_at": {
+          "type": "T.nilable(ActiveSupport::TimeWithZone)",
+          "nullable": true,
+          "described": true,
+          "description": "The created at date of the leave"
+        },
+        "delegated_approver_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the leave"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the employee taking the leave"
+        },
+        "finish_on": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description": "Last day of the leave (inclusive); null while an open-ended leave has no end yet"
+        },
+        "finish_on_natural": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "half_day": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Which half of the day a half-day leave covers — `beginning_of_day` or `end_of_day`; null for full-day leaves"
+        },
+        "hourly": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "hours_amount_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Total hours the leave consumes, in hundredths of an hour (e.g. 800 = 8 hours); set for hourly leaves"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Identifier of the Leave"
+        },
+        "leave_type_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "ID of the leave type this leave is of"
+        },
+        "leave_type_identifier": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "reason": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The reason provided by the employee for taking the leave"
+        },
+        "start_on": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "First day of the leave"
+        },
+        "start_time": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The start time of the leave"
+        },
+        "type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "updated_at": {
+          "type": "ActiveSupport::TimeWithZone",
+          "nullable": false,
+          "described": true,
+          "description": "The updated at date of the leave"
+        }
+      },
+      "associations": {
+        "employee": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee taking the leave."
+        },
+        "leaveType": {
+          "target": "timeoff.leave_type",
+          "kind": "belongs_to",
+          "description": "The leave type this leave is of — carries the rules a leave condition branches on (approval_required, accrues, workable, payable, ...)."
+        }
+      },
+      "source": "backend/components/timeoff/app/resources/timeoff/leave.yml",
+      "description": "A time off leave — one employee's request to be absent for a date range (or part of a day) under a given leave type. It is the central object of the time off domain; approval routing and leave conditions branch on its dates, its type and its tri-state `approved` status (null = pending, true = approved, false = rejected)."
+    },
+    "timeoff.leave_type": {
+      "fields": {
+        "accrues": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether leaves of this type consume an accruing balance/allowance (vs. a non-accruing type that does not draw down a balance)"
+        },
+        "active": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether the leave type is active"
+        },
+        "allow_endless": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether leaves of this type may be open-ended (created with no finish date)"
+        },
+        "allowance_ids": {
+          "type": "T::Array[Integer]",
+          "nullable": false,
+          "described": true,
+          "description": "IDs of the allowances this leave type draws its balance from"
+        },
+        "approval_required": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether leaves of this type must be approved before they take effect (when false, requests are auto-approved on creation)"
+        },
+        "attachment": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether an attachment (e.g. a sick note) can be added to leaves of this type"
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company this leave type belongs to"
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "Free-text description of the leave type"
+        },
+        "details_required": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the requester must provide additional details (a reason) when requesting this leave type"
+        },
+        "eau_eligible": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "half_days_units_enabled": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether leaves of this type can be requested in half-day units"
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "Identifier of the leave type"
+        },
+        "identifier": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Unique identifier of the leave type"
+        },
+        "is_attachment_mandatory": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether an attachment is mandatory (not just allowed) to request this leave type"
+        },
+        "max_days_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Maximum number of days a single request may take, in hundredths of a day (e.g. 5000 = 50 days); null if unbounded"
+        },
+        "min_days_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Minimum number of days a single request must take, in hundredths of a day (e.g. 1000 = 10 days); null if unbounded"
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Name of the leave type"
+        },
+        "payable": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether leaves of this type are paid"
+        },
+        "restricted": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether requesting this leave type is restricted to specific employees or conditions rather than open to everyone"
+        },
+        "visibility": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether the leave type is visible to employees (vs. admin-only)"
+        },
+        "workable": {
+          "type": "T::Boolean",
+          "nullable": false,
+          "described": true,
+          "description": "Whether days taken under this leave type still count as workable (working) days"
+        }
+      },
+      "associations": {
+        "company": {
+          "target": "api_core.company",
+          "kind": "belongs_to",
+          "description": "The company (tenant) this leave type belongs to."
+        }
+      },
+      "source": "backend/components/timeoff/app/resources/timeoff/leave_type.yml",
+      "description": "A time off leave type — the configurable kind of leave an employee can request (holiday, sick leave, parental leave, ...). It carries the rules that govern requests of that kind, the flags rules branch on (whether it needs `approval_required`, whether it `accrues` a balance, is `workable`/`payable`, visible, restricted) and the allowances it draws from."
+    },
+    "timeoff.policy": {
+      "fields": {
+        "allowance_incidences": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description_withheld": true
+        },
+        "company_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the company that owns this policy."
+        },
+        "default_allowance_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "description": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description": "The policy description."
+        },
+        "id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "The policy id."
+        },
+        "main": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description": "Whether this is the company's main (default) time off policy — the one employees fall under unless assigned a specific policy."
+        },
+        "name": {
+          "type": "String",
+          "nullable": false,
+          "described": true,
+          "description": "Policy name."
+        }
+      },
+      "associations": {
+        "company": {
+          "target": "api_core.company",
+          "kind": "belongs_to",
+          "description": "The company (tenant) that owns this policy."
+        },
+        "employees": {
+          "target": "employees.employee",
+          "optional": true,
+          "kind": "has_many",
+          "description": "The employees currently assigned to this policy."
+        },
+        "policyAssignments": {
+          "target": "timeoff.policy_assignment",
+          "kind": "has_many",
+          "description": "The assignment records linking employees to this policy over time, each carrying its own effective dates."
+        }
+      },
+      "source": "backend/components/timeoff/app/resources/timeoff/policy.yml",
+      "description": "A time off policy — a named configuration that groups a set of allowances and governs the leaves of the employees assigned to it. A company has one main policy that employees fall under by default, plus optional policies for specific populations (e.g. remote employees)."
+    },
+    "timeoff.policy_assignment": {
+      "fields": {
+        "effective_at": {
+          "type": "Date",
+          "nullable": false,
+          "described": true,
+          "description": "Date from which this policy assignment takes effect for the employee"
+        },
+        "employee_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the employee this assignment governs"
+        },
+        "end_effective_at": {
+          "type": "T.nilable(Date)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": true,
+          "description": "Unique identifier of the policy assignment"
+        },
+        "is_initial": {
+          "type": "T.nilable(T::Boolean)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        },
+        "timeoff_policy_id": {
+          "type": "Integer",
+          "nullable": false,
+          "described": true,
+          "description": "ID of the time off policy assigned to the employee"
+        },
+        "timeoff_policy_name": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": true,
+          "description_withheld": true
+        }
+      },
+      "associations": {
+        "employee": {
+          "target": "employees.employee",
+          "kind": "belongs_to",
+          "description": "The employee this assignment governs."
+        },
+        "timeoff_policy": {
+          "target": "timeoff.policy",
+          "kind": "belongs_to",
+          "description": "The time off policy assigned to the employee for this period."
+        }
+      },
+      "source": "backend/components/timeoff/app/resources/timeoff/policy_assignment.yml",
+      "description": "A time off policy assignment — the record linking an employee to the time off policy that governs their leaves and allowances, effective from a given date. An employee's policy can change over time, so each assignment captures one such period; together they answer \"which policy applied to this employee, when\"."
+    },
+    "timeoff.allowance_tenure_period": {
+      "fields": {
+        "id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": false
+        },
+        "timeoff_allowance_id": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": false
+        },
+        "period_type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": false
+        },
+        "period_length": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": false
+        },
+        "max_cap_in_cents": {
+          "type": "T.nilable(Integer)",
+          "nullable": true,
+          "described": false
+        },
+        "balance_type": {
+          "type": "T.nilable(String)",
+          "nullable": true,
+          "described": false
+        }
+      },
+      "associations": {},
+      "registered_by": "pr_112685"
+    }
+  }
+}
