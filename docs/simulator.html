@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Accrual — ¿se cubre esta regla?</title>
+<title>Accrual — is this rule covered?</title>
 <style>
   :root { --bg:#0d1117; --surface:#161b22; --surface-2:#1c2333; --border:#30363d; --text:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --red:#f85149; --yellow:#d29922; --purple:#a371f7; }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -83,10 +83,10 @@
 </head>
 <body>
 
-<h1>¿Se cubre esta regla?</h1>
-<p class="subtitle">Escribe lo que pediría un cliente y mira qué pasaría en producción: qué dato hace falta, de dónde sale, qué expresión se genera y qué número da, al lado del que da hoy.</p>
+<h1>Is this rule covered?</h1>
+<p class="subtitle">Type what a customer asked for and see what production would do with it: which data it needs, where that comes from, the expression it generates and the number it pays, beside the number it pays today.</p>
 <div class="disclaimer">
-  <strong>Esto no es One.</strong> La frase la resuelve un modelo al que le pasamos nuestro catálogo de facts, no la skill de autoría que corre en producción. Lo que se mide aquí es si el dato llega y si la regla se puede escribir, no lo buena que es One redactando.
+  <strong>This is not One.</strong> The sentence is resolved by a model we hand our fact catalogue to, not by the authoring skill that runs in production. What is measured here is whether the data arrives and whether the rule can be written, not how well One writes.
 </div>
 
 <div class="grid">
@@ -94,18 +94,18 @@
   <div class="main">
 
     <div class="card">
-      <textarea id="prompt" placeholder="Los part-timers acumulan en proporción a su jornada"></textarea>
+      <textarea id="prompt" placeholder="Part-timers accrue in proportion to their working time"></textarea>
       <div class="row">
-        <button class="go" id="run">Simular</button>
-        <label class="toggle on" id="t83"><input type="checkbox" id="bind83" checked> #112683 · el contrato</label>
-        <label class="toggle on" id="t85"><input type="checkbox" id="bind85" checked> #112685 · el tramo de antigüedad</label>
-        <label class="toggle" id="tc"><input type="checkbox" id="canned"> respuestas pregrabadas</label>
+        <button class="go" id="run">Simulate</button>
+        <label class="toggle on" id="t83"><input type="checkbox" id="bind83" checked> #112683 · the contract</label>
+        <label class="toggle on" id="t85"><input type="checkbox" id="bind85" checked> #112685 · the seniority rung</label>
+        <label class="toggle" id="tc"><input type="checkbox" id="canned"> recorded answers</label>
         <span class="hint" id="status"></span>
       </div>
     </div>
 
     <div class="card">
-      <h3>El empleado y el contador simulados</h3>
+      <h3>The simulated employee and counter</h3>
       <div class="fields" id="editor"></div>
     </div>
 
@@ -152,18 +152,18 @@ const counter = {
 };
 
 const EDITABLE = [
-  ['contract_starts_on', 'Alta del contrato', 'date', employee],
-  ['terminated_on', 'Fecha de baja', 'date', employee],
-  ['tenure_date', 'Antigüedad desde', 'date', employee],
-  ['working_time_percentage_in_cents', '% jornada (en céntimos, vacío = completa)', 'number', employee],
-  ['working_hours', 'Horas semanales', 'number', employee],
-  ['country', 'País', 'text', employee],
-  ['holiday_allowance_in_cents', 'Derecho base (céntimos)', 'number', counter],
-  ['proration_type', 'Prorrateo', 'select:proration_disabled,proration_enabled', counter],
-  ['rounding', 'Redondeo', 'select:decimals,round_up,quarters,half_day', counter],
-  ['allowance_type', 'Unidad', 'select:days,hours', counter],
-  ['use_availability', 'Cadencia', 'select:all_days,daily,monthly_first_day,monthly_last_day', counter],
-  ['source_units', 'Origen', 'select:base_units,by_worked_time', counter]
+  ['contract_starts_on', 'Contract start', 'date', employee],
+  ['terminated_on', 'Termination date', 'date', employee],
+  ['tenure_date', 'Seniority from', 'date', employee],
+  ['working_time_percentage_in_cents', 'Working time % (in cents, empty = full time)', 'number', employee],
+  ['working_hours', 'Weekly hours', 'number', employee],
+  ['country', 'Country', 'text', employee],
+  ['holiday_allowance_in_cents', 'Base entitlement (cents)', 'number', counter],
+  ['proration_type', 'Proration', 'select:proration_disabled,proration_enabled', counter],
+  ['rounding', 'Rounding', 'select:decimals,round_up,quarters,half_day', counter],
+  ['allowance_type', 'Unit', 'select:days,hours', counter],
+  ['use_availability', 'Cadence', 'select:all_days,daily,monthly_first_day,monthly_last_day', counter],
+  ['source_units', 'Source', 'select:base_units,by_worked_time', counter]
 ];
 
 function renderEditor() {
@@ -212,13 +212,13 @@ function renderSidebar() {
 
   const sep = document.createElement('div');
   sep.className = 'sep pains';
-  sep.textContent = 'Pains de la tabla';
+  sep.textContent = 'Pains from the table';
   host.appendChild(sep);
   for (const pain of PAINS) {
     const btn = document.createElement('button');
     btn.className = 'shortcut';
     btn.innerHTML = `<span class="dot partial"></span>${escape(pain.title)}<span class="who">#${pain.pain} · ${pain.companies} co. · ${pain.cmrr.toLocaleString('es-ES')} €</span>`;
-    btn.onclick = () => fill(pain.facts.length ? `${pain.title}. Datos que necesita la regla: ${pain.facts.join(', ')}.` : pain.title);
+    btn.onclick = () => fill(pain.facts.length ? `${pain.title}. Data the rule needs: ${pain.facts.join(', ')}.` : pain.title);
     host.appendChild(btn);
   }
 }
@@ -284,21 +284,21 @@ function describeEntity(path, identifier, depth, seen) {
 }
 
 const CEL_RULES = `
-El lenguaje es CEL, con el dialecto exacto de Factor:
-- No hay reloj: no existe today() ni now(). Las fechas llegan como facts.
-- No existe max() ni min(): son math.greatest(a, b) y math.least(a, b).
-- Redondeo: round.nearest(x, paso), round.up, round.down, round.away_from_zero, round.banded(x, paso, bajo, alto).
-- Calendario: calendar.months_between(a, b) (excluyente), calendar.period_start/period_end(ts, "monthly", tz), calendar.count_working_days(a, b).
-- Fechas: ts.getDate(), ts.getMonth() (0 = enero), ts.getFullYear(), ts.getDayOfWeek() (0 = domingo). Restar dos fechas da una duración: (a - b).getHours() / 24.0 son días.
-- No hay fold: nada de sum, reduce ni recorrer listas.
-- El resultado tiene que ser un float y la expresión entera debe ir envuelta en una llamada de redondeo.
-- Los importes en céntimos se dividen: holiday_allowance_in_cents / 100.0, working_time_percentage_in_cents / 10000.0.
+The language is CEL, in Factor's exact dialect:
+- No clock: there is no today() and no now(). Dates arrive as facts.
+- No max() and no min(): they are math.greatest(a, b) and math.least(a, b).
+- Rounding: round.nearest(x, step), round.up, round.down, round.away_from_zero, round.banded(x, step, lower, upper).
+- Calendar: calendar.months_between(a, b) (exclusive), calendar.period_start/period_end(ts, "monthly", tz), calendar.count_working_days(a, b).
+- Dates: ts.getDate(), ts.getMonth() (0 = January), ts.getFullYear(), ts.getDayOfWeek() (0 = Sunday). Subtracting two dates gives a duration: (a - b).getHours() / 24.0 is days.
+- No fold: no sum, no reduce, no walking a list.
+- The result must be a float, and the whole expression must be wrapped in a rounding call.
+- Amounts in cents are divided: holiday_allowance_in_cents / 100.0, working_time_percentage_in_cents / 10000.0.
 `.trim();
 
 function modelPrompt(text, enabled) {
-  return `Eres el motor de autoría de reglas de acumulación de vacaciones de Factorial. Un administrador te pide una regla en prosa. Tu trabajo es decidir si se puede expresar con los datos que el motor alimenta, y si se puede, escribir la expresión.
+  return `You are Factorial's authoring engine for time off accrual rules. An admin asks for a rule in prose. Your job is to decide whether it can be expressed with the data the engine feeds, and if it can, to write the expression.
 
-PETICIÓN DEL ADMINISTRADOR:
+THE ADMIN'S REQUEST:
 """
 ${text}
 """
@@ -307,16 +307,16 @@ ${CEL_RULES}
 
 ${authoringCatalog(enabled)}
 
-Contesta SOLO con un objeto JSON, sin texto alrededor y sin vallas de código:
+Answer with a JSON object ONLY, no surrounding text and no code fences:
 {
-  "expressible": true o false,
-  "expression": "la expresión CEL completa, o null",
-  "reasoning": "una o dos frases en castellano explicando qué has hecho o por qué no se puede",
-  "missing": ["el dato o la capacidad que falta, en castellano, si no se puede"],
-  "settings": "el cambio de configuración del contador que haría falta, o null"
+  "expressible": true or false,
+  "expression": "the complete CEL expression, or null",
+  "reasoning": "one or two sentences saying what you did, or why it cannot be done",
+  "missing": ["the datum or the capability that is missing, if it cannot be done"],
+  "settings": "the counter setting that would have to change, or null"
 }
 
-Si la petición no es de acumulación (aprobaciones, avisos, arrastre, cómo se disfrutan los días), di que no es expresable y dilo en missing.`;
+The admin may write in any language; answer in English regardless. If the request is not about accrual (approvals, notifications, carry-over, how days are taken), say it is not expressible and say so in missing.`;
 }
 
 // --- the model ---------------------------------------------------------------------
@@ -328,34 +328,34 @@ Si la petición no es de acumulación (aprobaciones, avisos, arrastre, cómo se 
 // model's.
 const CANNED = [
   {
-    match: /part.?time|parcial|jornada|fte|proporción a su jornada/i,
+    match: /part.?time|parcial|jornada|fte|working time/i,
     expressible: true,
     expression: 'round.nearest(double(allowance.holiday_allowance_in_cents) / 100.0 * (double(contract.working_time_percentage_in_cents) / 10000.0), 0.01)',
-    reasoning: 'El derecho base escalado por el porcentaje de jornada del contrato, que llega como entidad enlazada.',
+    reasoning: 'The base entitlement scaled by the contract\'s working time percentage, which arrives as a bound entity.',
     missing: [],
     settings: null
   },
   {
-    match: /lugar de trabajo|centro|guadalajara|segovia|workplace/i,
+    match: /lugar de trabajo|centro|guadalajara|segovia|workplace|location/i,
     expressible: true,
     expression: "round.nearest(contract.employee.default_location.country == 'ES' ? double(allowance.holiday_allowance_in_cents) / 100.0 + 1.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)",
-    reasoning: 'El centro de trabajo se alcanza navegando desde el contrato hasta el empleado y su localización.',
+    reasoning: 'The workplace is reached by navigating from the contract to the employee and their location.',
     missing: [],
     settings: null
   },
   {
-    match: /100 personas|headcount|plantilla del centro/i,
+    match: /100 personas|100 people|headcount/i,
     expressible: false,
     expression: null,
-    reasoning: 'Hace falta contar cuánta gente hay en el centro a la fecha del ciclo, y una regla no puede contar filas.',
-    missing: ['el número de personas por centro de trabajo: no es un campo, es un agregado, y accrual no enlaza ninguno'],
+    reasoning: 'It needs a headcount per workplace as of the cycle date, and a rule cannot count rows.',
+    missing: ['headcount per workplace: not a field but an aggregate, and accrual binds none'],
     settings: null
   },
   {
-    match: /cese|cesat|baja antes del|termination|se va antes/i,
+    match: /cese|cesat|baja antes del|termination|leaves before/i,
     expressible: true,
     expression: 'round.nearest(contract.employee.terminated_on != null && contract.employee.terminated_on.getDate() < 15 ? 0.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)',
-    reasoning: 'La fecha de baja llega navegando del contrato al empleado, así que el corte del día 15 se puede escribir.',
+    reasoning: 'The termination date is reached from the contract through the employee, so the day-15 cutoff can be written.',
     missing: [],
     settings: null
   }
@@ -364,7 +364,7 @@ const CANNED = [
 async function askModel(text, enabled) {
   if (document.getElementById('canned').checked) {
     const hit = CANNED.find((c) => c.match.test(text));
-    if (!hit) throw new Error('No tengo una respuesta pregrabada para esa frase. Desmarca "pregrabadas" para preguntarle al modelo.');
+    if (!hit) throw new Error('I have no recorded answer for that sentence. Uncheck "recorded answers" to ask the model.');
     return { ...hit, canned: true };
   }
 
@@ -376,8 +376,8 @@ async function askModel(text, enabled) {
     return answer;
   }
 
-  const key = localStorage.getItem('anthropic_key') || window.prompt('Pega una clave de la API de Anthropic (se guarda solo en este navegador)');
-  if (!key) throw new Error('Sin clave no puedo llamar al modelo.');
+  const key = localStorage.getItem('anthropic_key') || window.prompt('Paste an Anthropic API key (stored in this browser only)');
+  if (!key) throw new Error('Without a key I cannot call the model.');
   localStorage.setItem('anthropic_key', key);
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -394,7 +394,7 @@ async function askModel(text, enabled) {
       messages: [{ role: 'user', content: prompt }]
     })
   });
-  if (!response.ok) throw new Error(`La API ha contestado ${response.status}: ${await response.text()}`);
+  if (!response.ok) throw new Error(`The API answered ${response.status}: ${await response.text()}`);
   const payload = await response.json();
   const raw = payload.content.map((c) => c.text || '').join('').trim();
   return JSON.parse(raw.replace(/^```(json)?|```$/g, '').trim());
@@ -411,7 +411,7 @@ async function run() {
   const button = document.getElementById('run');
   const status = document.getElementById('status');
   button.disabled = true;
-  status.textContent = 'Preguntando al modelo…';
+  status.textContent = 'Asking the model…';
 
   try {
     lastAnswer = { text, answer: await askModel(text, enabledStates()) };
@@ -419,7 +419,7 @@ async function run() {
     render(lastAnswer);
   } catch (error) {
     status.textContent = '';
-    document.getElementById('result').innerHTML = `<div class="card"><h2>No he podido resolverlo</h2><p class="err">${escape(error.message)}</p></div>`;
+    document.getElementById('result').innerHTML = `<div class="card"><h2>Could not resolve it</h2><p class="err">${escape(error.message)}</p></div>`;
   } finally {
     button.disabled = false;
   }
@@ -452,7 +452,7 @@ function render({ text, answer }) {
   });
 
   document.getElementById('result').innerHTML = `
-    ${answer.canned ? '<div class="disclaimer" style="margin-bottom:14px">Respuesta <strong>pregrabada</strong>, no la ha escrito el modelo ahora mismo.</div>' : ''}
+    ${answer.canned ? '<div class="disclaimer" style="margin-bottom:14px">A <strong>recorded</strong> answer. The model did not write it just now.</div>' : ''}
     ${verdictCard(answer, verdict)}
     ${factCard(reads, current, enabled)}
     ${operationCard(answer, expression, current)}
@@ -466,10 +466,10 @@ function safeReads(expression) {
 
 function verdictCard(answer, verdict) {
   const badge = !answer.expressible || !verdict.covered
-    ? '<span class="badge no">no se cubre</span>'
+    ? '<span class="badge no">not covered</span>'
     : verdict.warning
-      ? '<span class="badge warn">se calcula, pero no gobierna del todo</span>'
-      : '<span class="badge yes">se cubre</span>';
+      ? '<span class="badge warn">computed, but it does not fully govern</span>'
+      : '<span class="badge yes">covered</span>';
 
   const walls = verdict.walls.map((wall) => {
     const state = wallState(wall);
@@ -479,28 +479,28 @@ function verdictCard(answer, verdict) {
   return `<div class="card">
     <div class="verdict">${badge}<span class="desc">${escape(answer.reasoning || '')}</span></div>
     <div class="walls">${walls}</div>
-    ${(answer.missing || []).length ? `<p class="hint"><strong>Falta:</strong> ${answer.missing.map(escape).join(' · ')}</p>` : ''}
-    ${answer.settings ? `<p class="hint"><strong>Cambio de configuración:</strong> ${escape(answer.settings)}</p>` : ''}
+    ${(answer.missing || []).length ? `<p class="hint"><strong>Missing:</strong> ${answer.missing.map(escape).join(' · ')}</p>` : ''}
+    ${answer.settings ? `<p class="hint"><strong>Settings change:</strong> ${escape(answer.settings)}</p>` : ''}
   </div>`;
 }
 
 function wallState(wall) {
-  if (wall.wall === 'dato') {
-    if (wall.passes) return { cls: 'ok', text: 'todos los facts llegan' };
+  if (wall.wall === 'data') {
+    if (wall.passes) return { cls: 'ok', text: 'every fact arrives' };
     if (wall.blocked.length) {
       const first = wall.blocked[0];
-      const where = first.availableIn ? `llega con ${first.availableIn.replace('pr_', '#')}` : 'no existe expuesto';
+      const where = first.availableIn ? `arrives with ${first.availableIn.replace('pr_', '#')}` : 'not exposed anywhere';
       return { cls: 'ko', text: `<span class="path">${escape(first.path)}</span> — ${where}` };
     }
-    return { cls: 'warn', text: `${wall.trapped.length} dentro de una lista, sin forma de leerlos` };
+    return { cls: 'warn', text: `${wall.trapped.length} inside a list, with no way to read them` };
   }
-  if (wall.wall === 'operación') return wall.passes ? { cls: 'ok', text: 'CEL la acepta' } : { cls: 'ko', text: escape(wall.reason || '') };
-  if (wall.wall === 'elegibilidad') return wall.passes
-    ? { cls: 'ok', text: 'el contador recibe programa' }
+  if (wall.wall === 'expression') return wall.passes ? { cls: 'ok', text: 'CEL accepts it' } : { cls: 'ko', text: escape(wall.reason || '') };
+  if (wall.wall === 'eligibility') return wall.passes
+    ? { cls: 'ok', text: 'the counter gets a program' }
     : { cls: 'ko', text: wall.failures.map(escape).join('; ') };
   return wall.passes
-    ? { cls: 'ok', text: 'el número gobierna' }
-    : { cls: 'warn', text: 'difiere de legacy: la reserva y el arrastre siguen leyendo legacy' };
+    ? { cls: 'ok', text: 'the number governs' }
+    : { cls: 'warn', text: 'differs from legacy: booking and carry-over still read legacy' };
 }
 
 function factCard(reads, row, enabled) {
@@ -515,27 +515,27 @@ function factCard(reads, row, enabled) {
     const known = resolved.reachable ? resolved : resolvePath(catalog, allRoots(catalog), path);
     const value = valueAt(row.facts, path);
 
-    let tag = '<span class="tag none">no llega</span>';
+    let tag = '<span class="tag none">does not arrive</span>';
     if (resolved.reachable) {
-      if (resolved.throughCollection) tag = '<span class="tag list">en una lista</span>';
-      else if (resolved.state === 'today') tag = '<span class="tag today">llega hoy</span>';
+      if (resolved.throughCollection) tag = '<span class="tag list">inside a list</span>';
+      else if (resolved.state === 'today') tag = '<span class="tag today">arrives today</span>';
       else tag = `<span class="tag pr">${resolved.state.replace('pr_', '#')}</span>`;
     } else if (known.reachable) {
-      tag = `<span class="tag none">apagado: ${known.state.replace('pr_', '#')}</span>`;
+      tag = `<span class="tag none">switched off: ${known.state.replace('pr_', '#')}</span>`;
     }
 
     const description = known.descriptor && known.descriptor.description
       ? escape(known.descriptor.description)
       : known.descriptor && known.descriptor.description_withheld
-        ? '<em>la yml la describe, pero la marca como interna</em>'
+        ? '<em>the yml describes it, but marks it internal</em>'
         : catalog.runtime_inputs[path]
           ? escape(catalog.runtime_inputs[path].summary)
-          : '<em>no existe en ninguna entidad registrada</em>';
+          : '<em>exists on no registered entity</em>';
     const origin = known.identifier
       ? escape(known.identifier)
       : catalog.runtime_inputs[path]
-        ? 'entrada de runtime'
-        : 'sin origen';
+        ? 'runtime input'
+        : 'no origin';
     resolved.source = resolved.source || known.source;
     return `<tr>
       <td><span class="path">${escape(path)}</span></td>
@@ -545,8 +545,8 @@ function factCard(reads, row, enabled) {
     </tr>`;
   }).join('');
 
-  return `<div class="card"><h3>Fact — qué lee, de dónde sale y con qué valor</h3>
-    <table><thead><tr><th>Fact</th><th style="text-align:right">Valor</th><th>Estado</th><th>Qué es</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  return `<div class="card"><h3>Fact — what it reads, where it comes from, and its value</h3>
+    <table><thead><tr><th>Fact</th><th style="text-align:right">Value</th><th>State</th><th>What it is</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 function valueAt(facts, path) {
@@ -564,11 +564,11 @@ function formatValue(value) {
 function operationCard(answer, expression, row) {
   const authored = expression
     ? `<pre>${escape(expression)}</pre>${row.authored && row.authored.error ? `<p class="err">${escape(row.authored.error)}</p>${row.authored.hint ? `<p class="hint">${escape(row.authored.hint)}</p>` : ''}` : ''}`
-    : `<p class="err">El modelo no ha escrito ninguna expresión.</p>`;
+    : `<p class="err">The model wrote no expression.</p>`;
 
-  return `<div class="card"><h3>Operación — la expresión</h3>
+  return `<div class="card"><h3>Expression — the rule</h3>
     ${authored}
-    <h3 style="margin-top:14px">La que corre hoy en este contador</h3>
+    <h3 style="margin-top:14px">What runs on this counter today</h3>
     <pre style="opacity:0.75">${escape(canonicalExpression(counter))}</pre></div>`;
 }
 
@@ -581,8 +581,8 @@ function engineCard(rows, current, expression) {
     const down = next !== null && next < now;
     return `<div class="barcol">
       <div class="barpair">
-        <div class="bar now" style="height:${(now / maxValue) * 100}%" title="hoy: ${now}"></div>
-        ${next === null ? '' : `<div class="bar new ${down ? 'down' : ''}" style="height:${(next / maxValue) * 100}%" title="con la regla: ${next}"></div>`}
+        <div class="bar now" style="height:${(now / maxValue) * 100}%" title="today: ${now}"></div>
+        ${next === null ? '' : `<div class="bar new ${down ? 'down' : ''}" style="height:${(next / maxValue) * 100}%" title="with the rule: ${next}"></div>`}
       </div>
       <div class="barlab">${r.label}</div>
     </div>`;
@@ -590,17 +590,17 @@ function engineCard(rows, current, expression) {
 
   const body = rows.map((r) => {
     const next = r.authored;
-    const cell = !next ? '—' : next.error ? `<span class="err">no evalúa</span>` : round(next.value);
+    const cell = !next ? '—' : next.error ? `<span class="err">does not evaluate</span>` : round(next.value);
     const delta = next && typeof next.value === 'number' ? round(next.value - r.today.value) : '';
     return `<tr><td>${r.label}</td><td class="desc">${r.starts_on} → ${r.ends_on}</td>
       <td class="num">${round(r.today.value)}</td><td class="num">${cell}</td><td class="num">${delta}</td></tr>`;
   }).join('');
 
-  return `<div class="card"><h3>Engine — lo que acumularía este empleado</h3>
+  return `<div class="card"><h3>Engine — what this employee would accrue</h3>
     <div class="bars">${bars}</div>
-    <div class="legend"><span><span class="swatch" style="background:#30454f"></span>hoy</span><span><span class="swatch" style="background:var(--accent)"></span>con la regla nueva</span></div>
-    <table style="margin-top:12px"><thead><tr><th>Ciclo</th><th>Ventana</th><th style="text-align:right">Hoy</th><th style="text-align:right">Con la regla</th><th style="text-align:right">Diferencia</th></tr></thead><tbody>${body}</tbody></table>
-    <p class="hint">El número de hoy sale de la expresión canónica que el motor genera para este contador, con el mismo redondeo. Las 20 formas de redondeo están comprobadas contra el emisor de Ruby.</p></div>`;
+    <div class="legend"><span><span class="swatch" style="background:#30454f"></span>today</span><span><span class="swatch" style="background:var(--accent)"></span>with the new rule</span></div>
+    <table style="margin-top:12px"><thead><tr><th>Cycle</th><th>Window</th><th style="text-align:right">Today</th><th style="text-align:right">With the rule</th><th style="text-align:right">Difference</th></tr></thead><tbody>${body}</tbody></table>
+    <p class="hint">Today's number comes from the canonical expression the engine generates for this counter, with the same rounding. All twenty rounding forms are pinned against the Ruby emitter.</p></div>`;
 }
 
 const round = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);

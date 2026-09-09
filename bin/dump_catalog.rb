@@ -81,12 +81,12 @@ PR_112685_ENTITY = {
 
 BINDINGS = {
   'today' => {
-    'label' => 'Lo que llega hoy',
+    'label' => 'What arrives today',
     'entities' => { 'allowance' => 'timeoff.allowance' },
     'scalars' => RUNTIME_INPUTS.reject { |_, v| v['kind'] == 'entity' }.keys
   },
   'pr_112683' => {
-    'label' => 'Con #112683 — el contrato',
+    'label' => 'With #112683 — the contract',
     'entities' => { 'contract' => 'contracts.contract_version' },
     'scalars' => [],
     'caveat' => 'The bound row is the REFERENCE contract, resolved today ' \
@@ -95,14 +95,14 @@ BINDINGS = {
                 'and a recomputed past cycle reads as today.'
   },
   'pr_112685' => {
-    'label' => 'Con #112685 — el tramo de antigüedad',
+    'label' => 'With #112685 — the seniority rung',
     'entities' => { 'tenure' => 'timeoff.allowance_tenure_period' },
     'scalars' => [],
     'caveat' => 'The rung answers WHICH tier applies, never its amount: adjustment_in_cents ' \
                 'is deliberately off the allowlist, so the bonus stays on its guarded path.'
   },
   'discarded_facts' => {
-    'label' => 'Los tres facts que ya se calculan y se tiran',
+    'label' => 'The three facts already computed and discarded',
     'entities' => {},
     'scalars' => %w[tenure_years_at_period_start tenure_months_at_period_start absences_in_period],
     'caveat' => 'Computed on every evaluation in AccrualFactBuilder and never fed: three keys ' \

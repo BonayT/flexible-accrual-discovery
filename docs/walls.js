@@ -8,9 +8,9 @@
 // names the earliest that bites.
 
 const BINDING_LABELS = {
-  today: 'llega hoy',
-  pr_112683: 'llega con #112683',
-  pr_112685: 'llega con #112685'
+  today: 'arrives today',
+  pr_112683: 'arrives with #112683',
+  pr_112685: 'arrives with #112685'
 };
 
 // Where a root name comes from, per binding state: an entity identifier, or the
@@ -105,7 +105,7 @@ function assessData(catalog, reads, enabled) {
   const trapped = found.filter((f) => f.reachable && f.throughCollection);
 
   return {
-    wall: 'dato',
+    wall: 'data',
     passes: blocked.length === 0 && trapped.length === 0,
     facts: found,
     blocked,
@@ -116,9 +116,9 @@ function assessData(catalog, reads, enabled) {
 // --- wall 2: the operation ------------------------------------------------------
 
 function assessOperation(result) {
-  if (!result) return { wall: 'operación', passes: false, reason: 'sin expresión' };
-  if (result.error) return { wall: 'operación', passes: false, reason: result.error, hint: result.hint };
-  return { wall: 'operación', passes: true };
+  if (!result) return { wall: 'expression', passes: false, reason: 'no expression' };
+  if (result.error) return { wall: 'expression', passes: false, reason: result.error, hint: result.hint };
+  return { wall: 'expression', passes: true };
 }
 
 // --- wall 3: the counter ---------------------------------------------------------
@@ -129,16 +129,16 @@ function assessOperation(result) {
 function assessCounter(counter, catalog) {
   const failures = [];
   if (counter.use_availability && counter.use_availability !== 'all_days') {
-    failures.push(`la cadencia es ${counter.use_availability} y el gate exige all_days`);
+    failures.push(`the cadence is ${counter.use_availability} and the gate requires all_days`);
   }
   if (counter.source_units && counter.source_units !== 'base_units') {
-    failures.push(`el contador es ${counter.source_units} y el gate exige base_units`);
+    failures.push(`the counter is ${counter.source_units} and the gate requires base_units`);
   }
   if (counter.feature_enabled === false) {
-    failures.push('la compañía no tiene DEV_FLEXIBLE_ACCRUAL_AUTHORITATIVE encendida');
+    failures.push('the company does not have DEV_FLEXIBLE_ACCRUAL_AUTHORITATIVE on');
   }
   return {
-    wall: 'elegibilidad',
+    wall: 'eligibility',
     passes: failures.length === 0,
     failures,
     source: catalog.eligibility_gate.source
@@ -156,7 +156,7 @@ function assessLanding(catalog, todayValue, authoredValue) {
     Math.abs(todayValue - authoredValue) > 1e-9;
 
   return {
-    wall: 'aterrizaje',
+    wall: 'landing',
     passes: !diverges,
     diverges,
     gaps: catalog.landing_gaps
@@ -165,7 +165,7 @@ function assessLanding(catalog, todayValue, authoredValue) {
 
 // --- the verdict -------------------------------------------------------------------
 
-const ORDER = ['dato', 'operación', 'elegibilidad', 'aterrizaje'];
+const ORDER = ['data', 'expression', 'eligibility', 'landing'];
 
 function assess({ catalog, counter, reads, result, todayValue, enabled = ['pr_112683', 'pr_112685'] }) {
   const walls = [
@@ -180,10 +180,10 @@ function assess({ catalog, counter, reads, result, todayValue, enabled = ['pr_11
   return {
     walls,
     stoppedBy: stoppedBy ? stoppedBy.wall : null,
-    // "Se cubre" means the number is computed AND governs. A divergence at the
+    // "Covered" means the number is computed AND governs. A divergence at the
     // landing wall is not a refusal, so it reads as covered-with-a-warning.
-    covered: !stoppedBy || stoppedBy.wall === 'aterrizaje',
-    warning: stoppedBy && stoppedBy.wall === 'aterrizaje'
+    covered: !stoppedBy || stoppedBy.wall === 'landing',
+    warning: stoppedBy && stoppedBy.wall === 'landing'
   };
 }
 

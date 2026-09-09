@@ -354,7 +354,7 @@ function evaluateCycle(expression, facts, options = {}) {
   try {
     const { value, reads } = evaluate(expression, facts, options);
     if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return { error: `la expresión devolvió ${JSON.stringify(value)} y el contrato dice float`, reads };
+      return { error: `the expression returned ${JSON.stringify(value)} and the contract says float`, reads };
     }
     return { value, reads };
   } catch (error) {

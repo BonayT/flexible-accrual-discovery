@@ -60,7 +60,7 @@
   },
   "bindings": {
     "today": {
-      "label": "Lo que llega hoy",
+      "label": "What arrives today",
       "entities": {
         "allowance": "timeoff.allowance"
       },
@@ -78,7 +78,7 @@
       ]
     },
     "pr_112683": {
-      "label": "Con #112683 — el contrato",
+      "label": "With #112683 — the contract",
       "entities": {
         "contract": "contracts.contract_version"
       },
@@ -86,7 +86,7 @@
       "caveat": "The bound row is the REFERENCE contract, resolved today (Contracts::Repositories::ReferenceContracts), not the version in force during the cycle being computed. A mid-cycle change reads as its end state, and a recomputed past cycle reads as today."
     },
     "pr_112685": {
-      "label": "Con #112685 — el tramo de antigüedad",
+      "label": "With #112685 — the seniority rung",
       "entities": {
         "tenure": "timeoff.allowance_tenure_period"
       },
@@ -94,7 +94,7 @@
       "caveat": "The rung answers WHICH tier applies, never its amount: adjustment_in_cents is deliberately off the allowlist, so the bonus stays on its guarded path."
     },
     "discarded_facts": {
-      "label": "Los tres facts que ya se calculan y se tiran",
+      "label": "The three facts already computed and discarded",
       "entities": {},
       "scalars": [
         "tenure_years_at_period_start",

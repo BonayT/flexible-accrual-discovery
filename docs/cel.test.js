@@ -23,7 +23,7 @@ function eq(actual, expected, note) {
   const same = Number.isFinite(expected) && Number.isFinite(actual)
     ? Math.abs(actual - expected) < 1e-9
     : actual === expected;
-  if (!same) throw new Error(`${note || ''} esperaba ${JSON.stringify(expected)}, obtuve ${JSON.stringify(actual)}`);
+  if (!same) throw new Error(`${note || ''} expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
 function run(source, bindings = {}, options = {}) {
@@ -34,14 +34,14 @@ function refuses(source, bindings, fragment) {
   try {
     evaluate(source, bindings || {});
   } catch (error) {
-    if (!(error instanceof CelError)) throw new Error(`esperaba CelError, obtuve ${error.name}: ${error.message}`);
+    if (!(error instanceof CelError)) throw new Error(`expected a CelError, got ${error.name}: ${error.message}`);
     const haystack = `${error.message} ${error.hint || ''}`;
     if (!haystack.includes(fragment)) {
-      throw new Error(`el mensaje no menciona ${JSON.stringify(fragment)}: ${haystack}`);
+      throw new Error(`the message does not mention ${JSON.stringify(fragment)}: ${haystack}`);
     }
     return;
   }
-  throw new Error('esperaba que fallase y no falló');
+  throw new Error('expected it to fail and it did not');
 }
 
 const utc = (iso) => new Date(`${iso}T00:00:00Z`);
@@ -75,10 +75,10 @@ check('the part-time rule pays half', () =>
   ));
 
 check('an unbound root is refused, not silently null', () =>
-  refuses('employee.terminated_on > cycle_start_date', { allowance }, 'no hay ningún fact llamado employee'));
+  refuses('employee.terminated_on > cycle_start_date', { allowance }, 'there is no fact called employee'));
 
 check('a field outside the allowlist is refused', () =>
-  refuses('allowance.maximum_amount_in_cents > 0.0', { allowance }, 'no está en el allowlist'));
+  refuses('allowance.maximum_amount_in_cents > 0.0', { allowance }, 'is not on the allowlist'));
 
 // The nullable %FTE case: NULL means full time, and Factor has no optional
 // inputs, so the rule that works for the part-timer breaks for everyone else.
@@ -109,7 +109,7 @@ check('round.up on a negative ceils toward zero', () => eq(run('round.up(-17.1, 
 check('no floating point crumbs', () => eq(run('round.nearest(0.1, 0.01)'), 0.1));
 check('a whole value on the step is left alone', () => eq(run('round.up(17.5, 0.5)'), 17.5));
 
-check('a zero step is refused', () => refuses('round.nearest(1.0, 0.0)', {}, 'cero'));
+check('a zero step is refused', () => refuses('round.nearest(1.0, 0.0)', {}, 'zero'));
 
 // The half-day band: below .25 floors, .25 to .5 lands on the half, above ceils.
 check('round.banded floors under the lower bound', () => eq(run('round.banded(10.2, 0.5, 0.25, 0.5)'), 10));
@@ -153,7 +153,7 @@ check('period_start truncates to the month', () =>
 check('period_end lands on the last day of the month', () =>
   eq(run("calendar.period_end(hire_date, 'monthly', 'Europe/Madrid').getDate()", dates), 31));
 check('an unknown unit is refused', () =>
-  refuses("calendar.period_start(hire_date, 'fortnightly', 'Europe/Madrid')", dates, 'desconocida'));
+  refuses("calendar.period_start(hire_date, 'fortnightly', 'Europe/Madrid')", dates, 'unknown unit'));
 
 check('count_working_days excludes weekends', () =>
   eq(run('double(calendar.count_working_days(a, b))', { a: utc('2026-03-02'), b: utc('2026-03-08') }), 5));
@@ -167,7 +167,7 @@ check('count_working_days excludes company holidays', () =>
 
 check('there is no max()', () => refuses('max(1.0, 2.0)', {}, 'math.greatest'));
 check('there is no min()', () => refuses('min(1.0, 2.0)', {}, 'math.least'));
-check('there is no clock', () => refuses('today()', {}, 'reloj'));
+check('there is no clock', () => refuses('today()', {}, 'clock'));
 check('duration() tops out at hours', () => refuses("duration('160d')", {}, 'getHours'));
 check('there is no fold', () => refuses('sum(1.0)', {}, 'fold'));
 
@@ -222,9 +222,9 @@ check('the canonical shape evaluates end to end', () => {
 // --- report ----------------------------------------------------------------
 
 if (failures.length === 0) {
-  console.log(`${passed} comprobaciones, todas en verde`);
+  console.log(`${passed} checks, all green`);
 } else {
-  console.log(`${passed} en verde, ${failures.length} rotas:\n`);
+  console.log(`${passed} green, ${failures.length} broken:\n`);
   for (const failure of failures) console.log(`  ✗ ${failure.name}\n    ${failure.message}`);
   process.exitCode = 1;
 }

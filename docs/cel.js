@@ -56,7 +56,7 @@ function tokenize(source) {
         value += source[j];
         j += 1;
       }
-      if (j >= source.length) throw new CelError(`cadena sin cerrar a partir de la posición ${i}`);
+      if (j >= source.length) throw new CelError(`unterminated string starting at position ${i}`);
       tokens.push({ type: 'string', value });
       i = j + 1;
       continue;
@@ -73,7 +73,7 @@ function tokenize(source) {
 
     const two = source.slice(i, i + 2);
     const punct = punctuation.includes(two) ? two : punctuation.find((p) => p === char);
-    if (!punct) throw new CelError(`carácter inesperado ${JSON.stringify(char)} en la posición ${i}`);
+    if (!punct) throw new CelError(`unexpected character ${JSON.stringify(char)} at position ${i}`);
     tokens.push({ type: 'punct', value: punct });
     i += punct.length;
   }
@@ -92,7 +92,7 @@ function parse(source) {
   const at = (value) => peek().type === 'punct' && peek().value === value;
   const eat = (value) => { if (at(value)) { pos += 1; return true; } return false; };
   const expect = (value) => {
-    if (!eat(value)) throw new CelError(`esperaba ${JSON.stringify(value)} y encontré ${JSON.stringify(peek().value)}`);
+    if (!eat(value)) throw new CelError(`expected ${JSON.stringify(value)} but found ${JSON.stringify(peek().value)}`);
   };
 
   function ternary() {
@@ -143,7 +143,7 @@ function parse(source) {
     for (;;) {
       if (eat('.')) {
         const name = peek();
-        if (name.type !== 'ident') throw new CelError(`esperaba un nombre después del punto, encontré ${JSON.stringify(name.value)}`);
+        if (name.type !== 'ident') throw new CelError(`expected a name after the dot, found ${JSON.stringify(name.value)}`);
         pos += 1;
         if (eat('(')) node = { kind: 'method', target: node, name: name.value, args: args() };
         else node = { kind: 'member', target: node, name: name.value };
@@ -165,11 +165,11 @@ function parse(source) {
     }
     if (token.type === 'ident') { pos += 1; return { kind: 'ident', name: token.value }; }
     if (eat('(')) { const inner = ternary(); expect(')'); return inner; }
-    throw new CelError(`expresión inesperada en ${JSON.stringify(token.value)}`);
+    throw new CelError(`unexpected expression at ${JSON.stringify(token.value)}`);
   }
 
   const ast = ternary();
-  if (peek().type !== 'eof') throw new CelError(`sobra texto a partir de ${JSON.stringify(peek().value)}`);
+  if (peek().type !== 'eof') throw new CelError(`trailing text from ${JSON.stringify(peek().value)}`);
   return ast;
 }
 
@@ -195,12 +195,12 @@ function halfUp(value) {
 function requireNumber(value, where) {
   if (value === null || value === undefined) {
     throw new CelError(
-      `${where}: el argumento numérico se ha evaluado a null`,
-      'Un campo nullable enlaza a null y Factor no tiene entradas opcionales: la expresión revienta para toda la población que tenga ese campo vacío.'
+      `${where}: the numeric argument evaluated to null`,
+      'A nullable field binds to null and Factor has no optional inputs, so the expression breaks for every employee whose field is empty.'
     );
   }
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new CelError(`${where}: esperaba un número y he recibido ${describe(value)}`);
+    throw new CelError(`${where}: expected a number and got ${describe(value)}`);
   }
   return value;
 }
@@ -209,7 +209,7 @@ function describe(value) {
   if (value === null || value === undefined) return 'null';
   if (isTimestamp(value)) return `timestamp ${value.toISOString().slice(0, 10)}`;
   if (value instanceof Duration) return 'duration';
-  if (typeof value === 'object') return 'entidad';
+  if (typeof value === 'object') return 'entity';
   return `${typeof value} ${JSON.stringify(value)}`;
 }
 
@@ -218,12 +218,12 @@ function describe(value) {
 function roundNamespace(name, argv) {
   const stepArg = (value) => {
     const step = requireNumber(value, `round.${name}`);
-    if (step === 0) throw new CelError(`round.${name}: el paso no puede ser cero`);
+    if (step === 0) throw new CelError(`round.${name}: the step cannot be zero`);
     return step;
   };
 
   if (name === 'nearest' || name === 'up' || name === 'down' || name === 'away_from_zero') {
-    if (argv.length !== 2) throw new CelError(`round.${name} espera 2 argumentos y ha recibido ${argv.length}`);
+    if (argv.length !== 2) throw new CelError(`round.${name} takes 2 arguments and got ${argv.length}`);
     const num = requireNumber(argv[0], `round.${name}`);
     const step = stepArg(argv[1]);
 
@@ -235,7 +235,7 @@ function roundNamespace(name, argv) {
   }
 
   if (name === 'banded') {
-    if (argv.length !== 4) throw new CelError(`round.banded espera 4 argumentos y ha recibido ${argv.length}`);
+    if (argv.length !== 4) throw new CelError(`round.banded takes 4 arguments and got ${argv.length}`);
     const num = requireNumber(argv[0], 'round.banded');
     const step = stepArg(argv[1]);
     const lower = requireNumber(argv[2], 'round.banded');
@@ -250,21 +250,21 @@ function roundNamespace(name, argv) {
     return num < 0 ? -result : result;
   }
 
-  throw new CelError(`round.${name} no existe`, 'Las funciones de round son nearest, up, down, away_from_zero y banded.');
+  throw new CelError(`round.${name} does not exist`, 'The round functions are nearest, up, down, away_from_zero and banded.');
 }
 
 function mathNamespace(name, argv) {
   if (name !== 'greatest' && name !== 'least') {
-    throw new CelError(`math.${name} no existe`, 'El namespace math sólo tiene greatest y least.');
+    throw new CelError(`math.${name} does not exist`, 'The math namespace has only greatest and least.');
   }
   const numbers = argv.map((value, index) => requireNumber(value, `math.${name} (argumento ${index + 1})`));
-  if (numbers.length === 0) throw new CelError(`math.${name} necesita al menos un argumento`);
+  if (numbers.length === 0) throw new CelError(`math.${name} needs at least one argument`);
   return name === 'greatest' ? Math.max(...numbers) : Math.min(...numbers);
 }
 
 function calendarNamespace(name, argv, context) {
   const asTimestamp = (value, where) => {
-    if (!isTimestamp(value)) throw new CelError(`${where}: esperaba un timestamp y he recibido ${describe(value)}`);
+    if (!isTimestamp(value)) throw new CelError(`${where}: expected a timestamp and got ${describe(value)}`);
     return value;
   };
 
@@ -280,7 +280,7 @@ function calendarNamespace(name, argv, context) {
     const unit = argv[1];
     const units = ['daily', 'weekly', 'monthly', 'quarterly', 'yearly'];
     if (!units.includes(unit)) {
-      throw new CelError(`calendar.${name}: unidad ${JSON.stringify(unit)} desconocida`, `Las unidades son ${units.join(', ')}.`);
+      throw new CelError(`calendar.${name}: unknown unit ${JSON.stringify(unit)}`, `The units are ${units.join(', ')}.`);
     }
     // The browser has no tz database beyond the host's, and the simulated
     // employee is modelled in UTC, so truncation happens in UTC here. Stated
@@ -326,23 +326,23 @@ function calendarNamespace(name, argv, context) {
 
   if (name === 'country_timezone') {
     throw new CelError(
-      'calendar.country_timezone no está implementada en el simulador',
-      'Existe en el backend; aquí no cambia ningún resultado porque el empleado simulado vive en UTC.'
+      'calendar.country_timezone is not implemented in the simulator',
+      'It exists in the backend; here it changes no result because the simulated employee lives in UTC.'
     );
   }
 
-  throw new CelError(`calendar.${name} no existe`, 'El namespace calendar tiene period_start, period_end, count_working_days, months_between y country_timezone.');
+  throw new CelError(`calendar.${name} does not exist`, 'The calendar namespace has period_start, period_end, count_working_days, months_between and country_timezone.');
 }
 
 // Refusals the backend makes, reproduced so the simulator reports the real
 // reason instead of inventing a number.
 const REFUSED_GLOBALS = {
-  max: 'max() no existe en CEL: es math.greatest.',
-  min: 'min() no existe en CEL: es math.least.',
-  sum: 'cel-ruby no tiene fold: sum, reduce y los min/max desnudos revientan.',
-  reduce: 'cel-ruby no tiene fold: sum, reduce y los min/max desnudos revientan.',
-  today: "Factor's CEL no tiene reloj: no hay today() ni now(). Las fechas llegan como facts enlazados.",
-  now: "Factor's CEL no tiene reloj: no hay today() ni now(). Las fechas llegan como facts enlazados.",
+  max: 'max() does not exist in CEL: it is math.greatest.',
+  min: 'min() does not exist in CEL: it is math.least.',
+  sum: 'cel-ruby has no fold: sum, reduce and bare min/max all raise.',
+  reduce: 'cel-ruby has no fold: sum, reduce and bare min/max all raise.',
+  today: "Factor's CEL has no clock: there is no today() and no now(). Dates arrive as bound facts.",
+  now: "Factor's CEL has no clock: there is no today() and no now(). Dates arrive as bound facts.",
   duration: 'duration() no pasa de horas: duration("160d") y duration("1w") revientan. Usa (a - b).getHours() / 24.'
 };
 
@@ -360,8 +360,8 @@ function evaluate(source, bindings, options = {}) {
       return bindings[name];
     }
     throw new CelError(
-      `no hay ningún fact llamado ${name}`,
-      'Sólo se puede leer lo que el evaluador enlaza: cualquier otra referencia evalúa a un binding que falta y Factor la rechaza al guardar.'
+      `there is no fact called ${name}`,
+      'Only what the evaluator binds can be read: any other reference evaluates to a missing binding and Factor rejects it at save time.'
     );
   }
 
@@ -376,7 +376,7 @@ function evaluate(source, bindings, options = {}) {
       case 'unary': {
         const operand = walk(node.operand);
         if (node.operator === '!') return !operand;
-        return -requireNumber(operand, 'negación');
+        return -requireNumber(operand, 'negation');
       }
 
       case 'ternary':
@@ -406,42 +406,42 @@ function evaluate(source, bindings, options = {}) {
 
         if (operator === '+' && typeof left === 'string' && typeof right === 'string') return left + right;
 
-        const a = requireNumber(left, `operador ${operator}`);
-        const b = requireNumber(right, `operador ${operator}`);
+        const a = requireNumber(left, `operator ${operator}`);
+        const b = requireNumber(right, `operator ${operator}`);
         switch (operator) {
           case '+': return a + b;
           case '-': return a - b;
           case '*': return a * b;
           case '/':
-            if (b === 0) throw new CelError('división por cero');
+            if (b === 0) throw new CelError('division by zero');
             return a / b;
           case '%':
-            if (b === 0) throw new CelError('módulo por cero');
+            if (b === 0) throw new CelError('modulo by zero');
             return a % b;
           case '<': return a < b;
           case '<=': return a <= b;
           case '>': return a > b;
           case '>=': return a >= b;
-          default: throw new CelError(`operador ${operator} no soportado`);
+          default: throw new CelError(`operator ${operator} no soportado`);
         }
       }
 
       case 'member': {
         const target = walk(node.target);
         if (target && target.namespace) {
-          throw new CelError(`${target.namespace}.${node.name} se usa como valor y es una función`);
+          throw new CelError(`${target.namespace}.${node.name} is used as a value but is a function`);
         }
         if (target === null || target === undefined) {
           throw new CelError(`no puedo leer ${node.name} de un valor nulo`);
         }
         if (typeof target !== 'object' || isTimestamp(target)) {
-          throw new CelError(`${describe(target)} no tiene campos, y se le pide ${node.name}`);
+          throw new CelError(`${describe(target)} has no fields, and is asked for ${node.name}`);
         }
         if (!Object.prototype.hasOwnProperty.call(target, node.name)) {
-          const entity = target.__entity ? ` de ${target.__entity}` : '';
+          const entity = target.__entity ? ` of ${target.__entity}` : '';
           throw new CelError(
-            `el campo ${node.name}${entity} no está en el allowlist`,
-            'Factor rechaza al guardar cualquier referencia que no esté registrada para esa entidad.'
+            `the field ${node.name}${entity} is not on the allowlist`,
+            'Factor rejects at save time any reference not registered for that entity.'
           );
         }
         const path = node.target.kind === 'ident' ? `${node.target.name}.${node.name}` : node.name;
@@ -458,7 +458,7 @@ function evaluate(source, bindings, options = {}) {
           if (target.namespace === 'round') return roundNamespace(node.name, argv);
           if (target.namespace === 'math') return mathNamespace(node.name, argv);
           if (target.namespace === 'calendar') return calendarNamespace(node.name, argv, context);
-          throw new CelError(`el namespace ${target.namespace} no está implementado en el simulador`);
+          throw new CelError(`the ${target.namespace} namespace is not implemented in the simulator`);
         }
 
         if (isTimestamp(target)) {
@@ -468,7 +468,7 @@ function evaluate(source, bindings, options = {}) {
             case 'getFullYear': return target.getUTCFullYear();
             case 'getDayOfWeek': return target.getUTCDay(); // 0 = domingo
             case 'getHours': return target.getUTCHours();
-            default: throw new CelError(`un timestamp no responde a ${node.name}()`);
+            default: throw new CelError(`a timestamp does not respond to ${node.name}()`);
           }
         }
 
@@ -476,21 +476,21 @@ function evaluate(source, bindings, options = {}) {
           if (node.name === 'getHours') return Math.trunc(target.milliseconds / 3600000);
           if (node.name === 'getMinutes') return Math.trunc(target.milliseconds / 60000);
           if (node.name === 'getSeconds') return Math.trunc(target.milliseconds / 1000);
-          throw new CelError(`una duración no responde a ${node.name}()`);
+          throw new CelError(`a duration does not respond to ${node.name}()`);
         }
 
-        throw new CelError(`${describe(target)} no responde a ${node.name}()`);
+        throw new CelError(`${describe(target)} does not respond to ${node.name}()`);
       }
 
       case 'call': {
-        if (node.callee.kind !== 'ident') throw new CelError('sólo se pueden llamar funciones con nombre');
+        if (node.callee.kind !== 'ident') throw new CelError('only named functions can be called');
         const name = node.callee.name;
-        if (REFUSED_GLOBALS[name]) throw new CelError(`${name}() no existe en el CEL de Factor`, REFUSED_GLOBALS[name]);
+        if (REFUSED_GLOBALS[name]) throw new CelError(`${name}() does not exist in Factor's CEL`, REFUSED_GLOBALS[name]);
         const argv = node.args.map(walk);
         if (name === 'double') return requireNumber(argv[0], 'double()');
         if (name === 'int') return Math.trunc(requireNumber(argv[0], 'int()'));
         if (name === 'string') return String(argv[0]);
-        throw new CelError(`la función ${name}() no existe`);
+        throw new CelError(`the function ${name}() does not exist`);
       }
 
       default:

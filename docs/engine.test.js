@@ -23,7 +23,7 @@ function eq(actual, expected, note) {
   const same = typeof expected === 'number' && typeof actual === 'number'
     ? Math.abs(actual - expected) < 1e-9
     : actual === expected;
-  if (!same) throw new Error(`${note || ''} esperaba ${JSON.stringify(expected)}, obtuve ${JSON.stringify(actual)}`);
+  if (!same) throw new Error(`${note || ''} expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
 const counter = (overrides = {}) => ({
@@ -179,7 +179,7 @@ check('without the contract bound, the same rule cannot even be read', () => {
     expression: partTime,
     bindContract: false
   });
-  eq(row.authored.error.includes('no hay ningún fact llamado contract'), true);
+  eq(row.authored.error.includes('there is no fact called contract'), true);
 });
 
 check('the tenure rung is bound only when its pull request is on', () => {
@@ -191,7 +191,7 @@ check('the tenure rung is bound only when its pull request is on', () => {
     expression: 'double(tenure.period_length)',
     bindTenure: false
   });
-  eq(off.authored.error.includes('no hay ningún fact llamado tenure'), true);
+  eq(off.authored.error.includes('there is no fact called tenure'), true);
 });
 
 check('the contract carries the employee graph the CEL environment expands', () => {
@@ -250,9 +250,9 @@ check('an employee_hired_date cycle turns on their own anniversary', () => {
 // --- report -------------------------------------------------------------------------
 
 if (failures.length === 0) {
-  console.log(`${passed} comprobaciones, todas en verde`);
+  console.log(`${passed} checks, all green`);
 } else {
-  console.log(`${passed} en verde, ${failures.length} rotas:\n`);
+  console.log(`${passed} green, ${failures.length} broken:\n`);
   for (const failure of failures) console.log(`  ✗ ${failure.name}\n    ${failure.message}`);
   process.exitCode = 1;
 }

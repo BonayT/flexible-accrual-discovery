@@ -59,24 +59,24 @@ check('a rule reading only what is bound today is covered', () => {
 
 check('the part-time rule is stopped by the data before the PRs', () => {
   const v = verdict('double(contract.working_time_percentage_in_cents)', { enabled: [] });
-  eq(v.stoppedBy, 'dato'); eq(v.covered, false);
+  eq(v.stoppedBy, 'data'); eq(v.covered, false);
   eq(v.walls[0].blocked[0].availableIn, 'pr_112683');
 });
 
 check('and is covered once the contract is bound', () => {
   const v = verdict('double(contract.working_time_percentage_in_cents)');
-  eq(v.stoppedBy, 'aterrizaje'); eq(v.covered, true); eq(v.warning, true);
+  eq(v.stoppedBy, 'landing'); eq(v.covered, true); eq(v.warning, true);
 });
 
 check('a headcount rule is stopped by the data with nothing to enable', () => {
   const v = verdict('double(location.headcount)');
-  eq(v.stoppedBy, 'dato');
+  eq(v.stoppedBy, 'data');
   eq(v.walls[0].blocked[0].availableIn, null);
 });
 
 check('a broken expression is stopped by the operation', () => {
   const v = verdict('double(allowance.holiday_allowance_in_cents)', { result: { error: 'max() no existe' } });
-  eq(v.stoppedBy, 'operación');
+  eq(v.stoppedBy, 'expression');
 });
 
 check('a monthly counter is stopped by the gate, however good the rule', () => {
@@ -84,7 +84,7 @@ check('a monthly counter is stopped by the gate, however good the rule', () => {
     counter: { ...counter, use_availability: 'monthly_first_day' },
     result: ok(22), todayValue: 22
   });
-  eq(v.stoppedBy, 'elegibilidad');
+  eq(v.stoppedBy, 'eligibility');
   eq(v.walls[2].failures[0].includes('all_days'), true);
 });
 
@@ -92,12 +92,12 @@ check('a by_worked_time counter is stopped by the same gate', () => {
   const v = verdict('double(allowance.holiday_allowance_in_cents) / 100.0', {
     counter: { ...counter, source_units: 'by_worked_time' }, result: ok(22), todayValue: 22
   });
-  eq(v.stoppedBy, 'elegibilidad');
+  eq(v.stoppedBy, 'eligibility');
 });
 
 check('a number that differs from legacy warns about where it lands', () => {
   const v = verdict('double(allowance.holiday_allowance_in_cents) / 100.0', { result: ok(11), todayValue: 22 });
-  eq(v.stoppedBy, 'aterrizaje'); eq(v.warning, true);
+  eq(v.stoppedBy, 'landing'); eq(v.warning, true);
   eq(v.walls[3].gaps.length, 2);
 });
 
@@ -105,8 +105,8 @@ check('the data wall is reported before the gate, when both bite', () => {
   const v = verdict('double(contract.working_time_percentage_in_cents)', {
     counter: { ...counter, use_availability: 'daily' }, enabled: []
   });
-  eq(v.stoppedBy, 'dato');
+  eq(v.stoppedBy, 'data');
 });
 
-if (failures.length === 0) console.log(`${passed} comprobaciones, todas en verde`);
-else { console.log(`${passed} en verde, ${failures.length} rotas:\n`); for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.message}`); process.exitCode = 1; }
+if (failures.length === 0) console.log(`${passed} checks, all green`);
+else { console.log(`${passed} green,  broken:\n`); for (const f of failures) console.log(`  ✗ ${f.name}\n    ${f.message}`); process.exitCode = 1; }
