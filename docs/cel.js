@@ -508,13 +508,29 @@ function referencedFacts(source) {
   const ast = typeof source === 'string' ? parse(source) : source;
   const found = new Set();
 
+  // A member chain is one fact, however deep: `contract.employee.default_location
+  // .country` is the country, not four separate reads. Returns the dotted path
+  // when the chain is rooted in an identifier, and null when it is not (a method
+  // call in the middle, say), so the caller can fall back to walking children.
+  function chainPath(node) {
+    if (node.kind === 'ident') return NAMESPACES.has(node.name) ? null : node.name;
+    if (node.kind !== 'member') return null;
+    const parent = chainPath(node.target);
+    return parent === null ? null : `${parent}.${node.name}`;
+  }
+
   function walk(node) {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'ident' && !NAMESPACES.has(node.name)) found.add(node.name);
-    if (node.kind === 'member' && node.target.kind === 'ident' && !NAMESPACES.has(node.target.name)) {
-      found.add(`${node.target.name}.${node.name}`);
-      found.delete(node.target.name);
-      return;
+    if (node.kind === 'member') {
+      const path = chainPath(node);
+      if (path !== null) {
+        found.add(path);
+        // The prefixes of a path are not reads of their own.
+        const parts = path.split('.');
+        for (let i = 1; i < parts.length; i += 1) found.delete(parts.slice(0, i).join('.'));
+        return;
+      }
     }
     // `double(x)` names a function, not a fact, so the callee never counts.
     if (node.kind === 'call') {

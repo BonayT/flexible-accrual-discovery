@@ -569,42 +569,6 @@ export const PROMPTS = [
     "market": "CA",
     "source": "VHIO · 31 Aug",
     "family": "Things typed into the accrual chat that aren't accrual"
-  },
-  {
-    "text": "Base a legislación de país o convenio colectivo — lo puede hacer con base a la legislación portuguesa, por ejemplo, que dará una sugerencia ya de política",
-    "reply": "Suggestions are static and country-blind today. Document upload for agreements is stated as the direction of travel.",
-    "outcome": "refused",
-    "route": "spoken",
-    "market": null,
-    "source": "Investoc · NTE Process · Mobility Centro",
-    "family": "Requests about One itself"
-  },
-  {
-    "text": "Le gustaría eliminar las que realmente no le gusten para que One aprenda de ella",
-    "reply": "Suggestions do not adapt per admin.",
-    "outcome": "refused",
-    "route": "spoken",
-    "market": null,
-    "source": "Investoc · Mobility Centro",
-    "family": "Requests about One itself"
-  },
-  {
-    "text": "yo sí que aclararía lo que se puede meter y lo que no… ¿sabéis que a veces ponéis un pop-up o algo? Podéis meter x, x o y. Porque si no, puede dar lugar a error.",
-    "reply": "The strongest cross-client UX ask in the corpus.",
-    "outcome": "refused",
-    "route": "spoken",
-    "market": "ES",
-    "source": "Mobility Centro · NTE Process",
-    "family": "Requests about One itself"
-  },
-  {
-    "text": "¿cómo le tengo que hablar si yo no sé cómo piensa la máquina? Mi tema es que creo que yo le hablo en un idioma que no entiende.",
-    "reply": "The clearest statement of the prompting problem: the client is not short of rules, she is short of a shared vocabulary.",
-    "outcome": "refused",
-    "route": "spoken",
-    "market": "ES",
-    "source": "Rabat · 3 Sep",
-    "family": "Requests about One itself"
   }
 ];
 

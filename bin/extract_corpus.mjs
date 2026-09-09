@@ -33,6 +33,11 @@ const familyAt = (index) => {
   return current;
 };
 
+// Left out on purpose: that section collects asks about One as a product —
+// where its suggestions come from, whether it learns, what it should say it
+// cannot do. None of them is a rule, so the simulator has nothing to answer.
+const EXCLUDED_FAMILIES = ['Requests about One itself'];
+
 const entries = [];
 const entryRe = /<div class="entry"([^>]*)>([\s\S]*?)<div class="meta">([\s\S]*?)<\/div>/g;
 
@@ -47,6 +52,8 @@ for (const match of html.matchAll(entryRe)) {
   const chips = [...meta.matchAll(/<span class="chip[^"]*">([^<]*)<\/span>/g)].map((m) => decode(m[1]));
   const market = chips.find((c) => /^[A-Z]{2}$/.test(c)) || null;
   const source = decode((meta.match(/<span class="src-line">([\s\S]*?)<\/span>/) || [])[1] || '');
+
+  if (EXCLUDED_FAMILIES.includes(familyAt(match.index))) continue;
 
   entries.push({
     text: decode(said[1]),

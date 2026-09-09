@@ -185,6 +185,19 @@ check('referencedFacts ignores the namespaces', () => {
   eq(found.join(','), 'active_days');
 });
 
+check('referencedFacts keeps a whole chain as one fact', () => {
+  const found = referencedFacts('contract.employee.default_location.country == "ES"');
+  eq(found.join(','), 'contract.employee.default_location.country');
+});
+
+check('a chain reads through the graph', () =>
+  eq(
+    run('contract.employee.default_location.country', {
+      contract: { __entity: 'x', employee: { __entity: 'y', default_location: { __entity: 'z', country: 'ES' } } }
+    }),
+    'ES'
+  ));
+
 // --- the canonical shape ---------------------------------------------------
 // The generated per-counter expression, in miniature: day proration or the flat
 // entitlement, plus the tenure term, times the cadence window, all rounded.

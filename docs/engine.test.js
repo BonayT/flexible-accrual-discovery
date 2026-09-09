@@ -194,6 +194,33 @@ check('the tenure rung is bound only when its pull request is on', () => {
   eq(off.authored.error.includes('no hay ningún fact llamado tenure'), true);
 });
 
+check('the contract carries the employee graph the CEL environment expands', () => {
+  const row = oneCycle({
+    counter: counter(),
+    employee: employee({ location_country: 'ES', location_name: 'Guadalajara', terminated_on: '2026-08-31', termination_type: 'voluntary' }),
+    expression: "round.nearest(contract.employee.default_location.country == 'ES' ? 23.0 : 22.0, 0.01)"
+  });
+  eq(row.authored.value, 23);
+});
+
+check('the termination date is reachable through the employee', () => {
+  const row = oneCycle({
+    counter: counter(),
+    employee: employee({ terminated_on: '2026-08-10' }),
+    expression: 'round.nearest(contract.employee.terminated_on.getDate() < 15.0 ? 0.0 : 22.0, 0.01)'
+  });
+  eq(row.authored.value, 0);
+});
+
+check('the parent contract and its legal entity are one hop further', () => {
+  const row = oneCycle({
+    counter: counter(),
+    employee: employee({ legal_entity_country: 'FR' }),
+    expression: "round.nearest(contract.contract.legal_entity.country == 'FR' ? 25.0 : 23.0, 0.01)"
+  });
+  eq(row.authored.value, 25);
+});
+
 // --- several cycles ---------------------------------------------------------------
 
 check('a five-year window shows the ladder stepping up', () => {

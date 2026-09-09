@@ -202,8 +202,100 @@ function buildFacts(counter, employee, cycle, { bindContract, bindTenure }) {
   };
 
   if (bindContract) {
+    // The hops the CEL environment expands from the bound contract. Only the
+    // singular ones are modelled: a has_many binds as a list, and no expression
+    // can fold one, so offering it would invite a rule that cannot evaluate.
+    const day = (value) => (value ? new Date(value + 'T00:00:00Z') : null);
+
+    const location = {
+      __entity: 'locations.location',
+      id: 1,
+      name: employee.location_name || null,
+      country: employee.location_country || employee.country || null,
+      city: employee.location_city || null,
+      state: null,
+      postal_code: null,
+      timezone: 'Europe/Madrid',
+      main: true,
+      company_id: 1
+    };
+
+    const legalEntity = {
+      __entity: 'companies.legal_entity',
+      id: 1,
+      country: employee.legal_entity_country || employee.country || null,
+      currency: 'EUR',
+      legal_name: employee.legal_entity_name || null,
+      main: true,
+      company_id: 1
+    };
+
+    const terminationType = employee.termination_type
+      ? {
+          __entity: 'contracts.termination_type',
+          id: 1,
+          slug: employee.termination_type,
+          description: employee.termination_type,
+          termination_reason_type: null,
+          is_deprecated: false,
+          country: employee.country || null
+        }
+      : null;
+
+    const parentContract = {
+      __entity: 'contracts.contract',
+      id: 1,
+      employee_id: 1,
+      company_id: 1,
+      legal_entity_id: 1,
+      country: employee.country || null,
+      starts_on: day(employee.contract_starts_on),
+      ends_on: day(employee.contract_ends_on || employee.terminated_on),
+      is_discontinuous: false,
+      contract_type_type: null,
+      contract_type_id: null,
+      legal_entity: legalEntity,
+      status: { __entity: 'contracts.contract_status', id: 1, is_active: true, is_pausable: false, is_resumable: false }
+    };
+
+    const employeeEntity = {
+      __entity: 'employees.employee',
+      id: 1,
+      access_id: 1,
+      company_id: 1,
+      first_name: 'Simulada',
+      last_name: 'Empleada',
+      full_name: 'Simulada Empleada',
+      active: !employee.terminated_on,
+      is_terminating: Boolean(employee.terminated_on),
+      terminated_on: day(employee.terminated_on),
+      location_id: 1,
+      legal_entity_id: 1,
+      manager_id: null,
+      team_ids: [],
+      default_location: location,
+      company: { __entity: 'api_core.company', id: 1, name: 'Simulada SL', legal_name: 'Simulada SL' },
+      terminationType,
+      legalEntity: legalEntity
+    };
+
     facts.contract = {
       __entity: 'contracts.contract_version',
+      employee: employeeEntity,
+      contract: parentContract,
+      job_catalog_level: employee.job_level
+        ? {
+            __entity: 'job_catalog.level',
+            id: 1,
+            name: employee.job_level,
+            role_name: employee.job_role || null,
+            role_id: null,
+            order: 1,
+            is_default: false,
+            archived: false,
+            role: { __entity: 'job_catalog.role', id: 1, name: employee.job_role || null, description: null, archived: false, company_id: 1, competencies_ids: [], legal_entities_ids: [], supervisors_ids: [] }
+          }
+        : null,
       id: 1,
       employee_id: 1,
       company_id: 1,
