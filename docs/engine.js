@@ -330,6 +330,10 @@ function buildFacts(counter, employee, cycle, { bindContract, bindTenure }) {
     };
   }
 
+  // #113385 binds the employee as its own root as well as a hop off the contract,
+  // so a rule can say employee.terminated_on without going through the contract.
+  if (bindContract) facts.employee = facts.contract.employee;
+
   if (bindTenure) {
     const rung = rungFor(counter, facts.tenure_date, cycle.regular_end);
     facts.tenure = rung

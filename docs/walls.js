@@ -9,8 +9,8 @@
 
 const BINDING_LABELS = {
   today: 'arrives today',
-  pr_112683: 'arrives with #112683',
-  pr_112685: 'arrives with #112685'
+  pr_113385: 'arrives with #113385',
+  pr_113386: 'described by #113386'
 };
 
 // Where a root name comes from, per binding state: an entity identifier, or the
@@ -59,6 +59,12 @@ function resolvePath(catalog, roots, path) {
     const last = i === rest.length - 1;
     const field = entity.fields[name];
     if (last && field) {
+      // Registered, and kept from the accrual author on purpose. Distinct from a
+      // field that does not exist, because the answer to the admin is different:
+      // this one is a decision somebody made, not a gap somebody could fill.
+      if (field.withheld_from_accrual) {
+        return { reachable: false, reason: 'field_withheld', identifier, field: name, descriptor: field, source: entity.source };
+      }
       return {
         reachable: true,
         kind: 'field',
@@ -76,6 +82,12 @@ function resolvePath(catalog, roots, path) {
     const association = entity.associations[name];
     if (!association || !association.target) {
       return { reachable: false, reason: 'field_not_allowlisted', identifier, field: name, source: entity.source };
+    }
+    if (association.hidden_from_accrual) {
+      return { reachable: false, reason: 'association_hidden', identifier, field: name, target: association.target, source: entity.source };
+    }
+    if (association.target_not_allowed) {
+      return { reachable: false, reason: 'target_not_allowed', identifier, field: name, target: association.target, source: entity.source };
     }
 
     if (['has_many', 'has_many_through'].includes(association.kind)) throughCollection = true;
@@ -167,7 +179,7 @@ function assessLanding(catalog, todayValue, authoredValue) {
 
 const ORDER = ['data', 'expression', 'eligibility', 'landing'];
 
-function assess({ catalog, counter, reads, result, todayValue, enabled = ['pr_112683', 'pr_112685'] }) {
+function assess({ catalog, counter, reads, result, todayValue, enabled = ['pr_113385', 'pr_113386'] }) {
   const walls = [
     assessData(catalog, reads, enabled),
     assessOperation(result),

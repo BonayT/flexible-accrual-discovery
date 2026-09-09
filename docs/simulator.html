@@ -97,8 +97,8 @@
       <textarea id="prompt" placeholder="Part-timers accrue in proportion to their working time"></textarea>
       <div class="row">
         <button class="go" id="run">Simulate</button>
-        <label class="toggle on" id="t83"><input type="checkbox" id="bind83" checked> #112683 · the contract</label>
-        <label class="toggle on" id="t85"><input type="checkbox" id="bind85" checked> #112685 · the seniority rung</label>
+        <label class="toggle on" id="t385"><input type="checkbox" id="bind385" checked> #113385 · the employee and the contract</label>
+        <label class="toggle on" id="t386"><input type="checkbox" id="bind386" checked> #113386 · the rich catalog</label>
         <label class="toggle" id="tc"><input type="checkbox" id="canned"> recorded answers</label>
         <span class="hint" id="status"></span>
       </div>
@@ -234,8 +234,8 @@ function fill(text) {
 
 function enabledStates() {
   const states = [];
-  if (document.getElementById('bind83').checked) states.push('pr_112683');
-  if (document.getElementById('bind85').checked) states.push('pr_112685');
+  if (document.getElementById('bind385').checked) states.push('pr_113385');
+  if (document.getElementById('bind386').checked) states.push('pr_113386');
   return states;
 }
 
@@ -244,41 +244,52 @@ function enabledStates() {
 // left out on purpose — they are readable and useless, and offering them would
 // invite an expression that cannot be evaluated.
 function authoringCatalog(enabled) {
+  const rich = enabled.includes('pr_113386');
   const roots = rootIndex(catalog, enabled);
   const lines = [];
 
   for (const [name, root] of Object.entries(roots)) {
     if (root.kind !== 'entity') continue;
-    lines.push(...describeEntity(name, root.identifier, 0, new Set()));
+    lines.push(...describeEntity(name, root.identifier, 0, new Set(), rich));
   }
 
   const scalars = Object.entries(catalog.runtime_inputs)
     .filter(([, input]) => input.kind !== 'entity')
-    .map(([name, input]) => `  ${name} (${input.kind}) — ${input.summary}`);
+    .map(([name, input]) => (rich ? `  ${name} (${input.kind}) — ${input.summary}` : `  ${name}`));
 
   return [
-    'ENTRADAS ESCALARES QUE EL MOTOR ALIMENTA CADA CICLO:',
+    'SCALAR INPUTS THE ENGINE FEEDS EVERY CYCLE:',
     ...scalars,
     '',
-    'ENTIDADES ENLAZADAS Y SUS CAMPOS:',
+    'BOUND ENTITIES AND THEIR FIELDS:',
     ...lines
   ].join('\n');
 }
 
-function describeEntity(path, identifier, depth, seen) {
+// With #113386 the author reads the rich catalogue: types, enum values, the
+// prose each resource already carries, and the relationships it may follow.
+// Without it, bare field names — which is what the accrual lane publishes today,
+// and the reason One knows allowance.rounding exists without knowing its values.
+function describeEntity(path, identifier, depth, seen, rich) {
   if (depth > 2 || seen.has(identifier)) return [];
   const entity = catalog.entities[identifier];
-  if (!entity) return [];
+  if (!entity || entity.allowed_for_accrual === false) return [];
   seen.add(identifier);
 
-  const out = [`  ${path} → ${identifier}`];
+  const out = [rich && entity.description ? `  ${path} → ${identifier} — ${entity.description}` : `  ${path} → ${identifier}`];
+
   for (const [field, descriptor] of Object.entries(entity.fields)) {
+    if (descriptor.withheld_from_accrual) continue;
+    if (!rich) { out.push(`    ${path}.${field}`); continue; }
+    const values = descriptor.values ? ` one of: ${descriptor.values.join(', ')}.` : '';
     const description = descriptor.description ? ` — ${descriptor.description}` : '';
-    out.push(`    ${path}.${field} (${descriptor.type})${description}`);
+    out.push(`    ${path}.${field} (${descriptor.type})${description}${values}`);
   }
+
   for (const [name, association] of Object.entries(entity.associations)) {
+    if (association.hidden_from_accrual || association.target_not_allowed) continue;
     if (['has_many', 'has_many_through'].includes(association.kind)) continue;
-    out.push(...describeEntity(`${path}.${name}`, association.target, depth + 1, new Set(seen)));
+    out.push(...describeEntity(`${path}.${name}`, association.target, depth + 1, new Set(seen), rich));
   }
   return out;
 }
@@ -331,15 +342,15 @@ const CANNED = [
     match: /part.?time|parcial|jornada|fte|working time/i,
     expressible: true,
     expression: 'round.nearest(double(allowance.holiday_allowance_in_cents) / 100.0 * (double(contract.working_time_percentage_in_cents) / 10000.0), 0.01)',
-    reasoning: 'The base entitlement scaled by the contract\'s working time percentage, which arrives as a bound entity.',
+    reasoning: "The base entitlement scaled by the contract's working time percentage, which arrives as a bound entity.",
     missing: [],
     settings: null
   },
   {
     match: /lugar de trabajo|centro|guadalajara|segovia|workplace|location/i,
     expressible: true,
-    expression: "round.nearest(contract.employee.default_location.country == 'ES' ? double(allowance.holiday_allowance_in_cents) / 100.0 + 1.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)",
-    reasoning: 'The workplace is reached by navigating from the contract to the employee and their location.',
+    expression: "round.nearest(employee.default_location.country == 'ES' ? double(allowance.holiday_allowance_in_cents) / 100.0 + 1.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)",
+    reasoning: 'The workplace is one hop off the employee, who is bound as a root of her own.',
     missing: [],
     settings: null
   },
@@ -354,12 +365,29 @@ const CANNED = [
   {
     match: /cese|cesat|baja antes del|termination|leaves before/i,
     expressible: true,
-    expression: 'round.nearest(contract.employee.terminated_on != null && contract.employee.terminated_on.getDate() < 15 ? 0.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)',
-    reasoning: 'The termination date is reached from the contract through the employee, so the day-15 cutoff can be written.',
+    expression: 'round.nearest(employee.terminated_on != null && employee.terminated_on.getDate() < 15 ? 0.0 : double(allowance.holiday_allowance_in_cents) / 100.0, 0.01)',
+    reasoning: 'The termination date is a field on the employee, so the day-15 cutoff can be written.',
     missing: [],
+    settings: null
+  },
+  {
+    match: /salario|salary|sueldo/i,
+    expressible: false,
+    expression: null,
+    reasoning: 'The salary is registered on the contract and deliberately kept from accrual authoring.',
+    missing: ['contract.salary_amount: withheld by FIELD_OVERRIDES in the accrual view, not absent from the registry'],
+    settings: null
+  },
+  {
+    match: /sick|baja médica|ausencias|absences|leaves/i,
+    expressible: false,
+    expression: null,
+    reasoning: "The employee's absences are a collection, and the accrual view hides that hop on top of it.",
+    missing: ['employee.leaves: hidden by HIDDEN_ASSOCIATIONS, and CEL could not fold a list anyway'],
     settings: null
   }
 ];
+
 
 async function askModel(text, enabled) {
   if (document.getElementById('canned').checked) {
@@ -436,8 +464,8 @@ function render({ text, answer }) {
     expression,
     from: `${year - 2}-01-01`,
     to: `${year + 2}-12-31`,
-    bindContract: enabled.includes('pr_112683'),
-    bindTenure: enabled.includes('pr_112685')
+    bindContract: enabled.includes('pr_113385'),
+    bindTenure: false
   });
 
   const current = rows.find((r) => r.label === String(year)) || rows[0];
@@ -607,9 +635,9 @@ const round = (n) => (typeof n === 'number' ? Math.round(n * 100) / 100 : n);
 
 // --- wiring -----------------------------------------------------------------------
 
-for (const id of ['bind83', 'bind85']) {
+for (const id of ['bind385', 'bind386']) {
   document.getElementById(id).addEventListener('change', (e) => {
-    document.getElementById(id === 'bind83' ? 't83' : 't85').classList.toggle('on', e.target.checked);
+    document.getElementById(id === 'bind385' ? 't385' : 't386').classList.toggle('on', e.target.checked);
     if (lastAnswer) render(lastAnswer);
   });
 }

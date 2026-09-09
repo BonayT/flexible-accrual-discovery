@@ -11,7 +11,7 @@ const catalog = JSON.parse(readFileSync(new URL('./catalog.json', import.meta.ur
 let passed = 0;
 const failures = [];
 const check = (name, fn) => { try { fn(); passed += 1; } catch (e) { failures.push({ name, message: e.message }); } };
-const eq = (a, b, n) => { if (a !== b) throw new Error(`${n || ''} esperaba ${JSON.stringify(b)}, obtuve ${JSON.stringify(a)}`); };
+const eq = (a, b, n) => { if (a !== b) throw new Error(`${n || ''} expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); };
 
 const counter = { use_availability: 'all_days', source_units: 'base_units', feature_enabled: true };
 const ok = (value) => ({ value });
@@ -26,22 +26,37 @@ check('the counter is reachable today', () => {
   eq(r.reachable, true); eq(r.state, 'today');
 });
 
-check('the contract is not, until #112683', () => {
+check('the contract is not, until #113385', () => {
   eq(resolvePath(catalog, rootIndex(catalog, []), 'contract.working_time_percentage_in_cents').reachable, false);
-  const withPr = resolvePath(catalog, rootIndex(catalog, ['pr_112683']), 'contract.working_time_percentage_in_cents');
-  eq(withPr.reachable, true); eq(withPr.state, 'pr_112683');
+  const withPr = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'contract.working_time_percentage_in_cents');
+  eq(withPr.reachable, true); eq(withPr.state, 'pr_113385');
 });
 
 check('the workplace comes free with the contract, by navigation', () => {
-  const r = resolvePath(catalog, rootIndex(catalog, ['pr_112683']), 'contract.employee.default_location.country');
+  const r = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'contract.employee.default_location.country');
   eq(r.reachable, true);
   eq(r.hops.map((h) => h.to).join(' → '), 'employees.employee → locations.location');
   eq(r.throughCollection, false);
 });
 
-check('anything behind a collection is flagged as trapped', () => {
-  const r = resolvePath(catalog, rootIndex(catalog, ['pr_112683']), 'contract.employee.leaves.start_on');
+check('the absences are hidden from the accrual author, not merely trapped', () => {
+  const r = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'employee.leaves.start_on');
+  eq(r.reachable, false); eq(r.reason, 'association_hidden');
+});
+
+check('a collection that is not hidden is reachable and flagged as trapped', () => {
+  const r = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'employee.memberships.team.name');
   eq(r.reachable, true); eq(r.throughCollection, true);
+});
+
+check('salary is registered and withheld, which is not the same as absent', () => {
+  const r = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'contract.salary_amount');
+  eq(r.reachable, false); eq(r.reason, 'field_withheld');
+});
+
+check('an entity outside the accrual allowlist stops the hop', () => {
+  const r = resolvePath(catalog, rootIndex(catalog, ['pr_113385']), 'contract.job_catalog_level.name');
+  eq(r.reachable, false); eq(r.reason, 'association_hidden');
 });
 
 check('a field outside the allowlist says so, and names its resource', () => {
@@ -60,7 +75,7 @@ check('a rule reading only what is bound today is covered', () => {
 check('the part-time rule is stopped by the data before the PRs', () => {
   const v = verdict('double(contract.working_time_percentage_in_cents)', { enabled: [] });
   eq(v.stoppedBy, 'data'); eq(v.covered, false);
-  eq(v.walls[0].blocked[0].availableIn, 'pr_112683');
+  eq(v.walls[0].blocked[0].availableIn, 'pr_113385');
 });
 
 check('and is covered once the contract is bound', () => {

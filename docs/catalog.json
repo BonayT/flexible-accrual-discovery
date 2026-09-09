@@ -1,6 +1,6 @@
 {
-  "generated_from": "backend/components/factor/registry_snapshot.yml + app/resources/**/*.yml",
-  "entity_count": 40,
+  "generated_from": "registry_snapshot.yml + app/resources/**/*.yml, narrowed by Timeoff::Factor::AllowedFactorEntities (#113385)",
+  "entity_count": 39,
   "runtime_inputs": {
     "allowance": {
       "kind": "entity",
@@ -77,31 +77,59 @@
         "tenure_date"
       ]
     },
-    "pr_112683": {
-      "label": "With #112683 — the contract",
+    "pr_113385": {
+      "label": "With #113385 — the employee and the contract",
       "entities": {
+        "employee": "employees.employee",
         "contract": "contracts.contract_version"
       },
       "scalars": [],
-      "caveat": "The bound row is the REFERENCE contract, resolved today (Contracts::Repositories::ReferenceContracts), not the version in force during the cycle being computed. A mid-cycle change reads as its end state, and a recomputed past cycle reads as today."
+      "caveat": "The contract bound is the version in force on the cycle's reference date, resolved in Ruby by CycleContractVersion: CEL cannot pick a version out of the history, and is_reference is today's contract rather than the cycle's. One row per evaluation, so a cycle containing two different contracts still cannot be split."
     },
-    "pr_112685": {
-      "label": "With #112685 — the seniority rung",
-      "entities": {
-        "tenure": "timeoff.allowance_tenure_period"
-      },
-      "scalars": [],
-      "caveat": "The rung answers WHICH tier applies, never its amount: adjustment_in_cents is deliberately off the allowlist, so the bonus stays on its guarded path."
-    },
-    "discarded_facts": {
-      "label": "The three facts already computed and discarded",
+    "pr_113386": {
+      "label": "With #113386 — the rich catalog",
       "entities": {},
-      "scalars": [
-        "tenure_years_at_period_start",
-        "tenure_months_at_period_start",
-        "absences_in_period"
+      "scalars": [],
+      "describes_only": true,
+      "caveat": "Changes nothing about what a rule can reach: it changes what the author is told about it. Without it the schema lists bare field names, so One knows allowance.rounding exists but not that its values are decimals, half_day, quarters and round_up."
+    }
+  },
+  "accrual_view": {
+    "roots": {
+      "allowance": "timeoff.allowance",
+      "employee": "employees.employee",
+      "contract": "contracts.contract_version"
+    },
+    "identifiers": [
+      "api_core.company",
+      "companies.legal_entity",
+      "contracts.contract",
+      "contracts.contract_status",
+      "contracts.contract_version",
+      "contracts.termination_type",
+      "employees.employee",
+      "locations.location",
+      "teams.membership",
+      "teams.team",
+      "timeoff.allowance",
+      "timeoff.leave",
+      "timeoff.leave_type",
+      "timeoff.policy",
+      "timeoff.policy_assignment"
+    ],
+    "withheld_fields": {
+      "contracts.contract_version": [
+        "salary_amount",
+        "salary_frequency"
+      ]
+    },
+    "hidden_associations": {
+      "employees.employee": [
+        "leaves"
       ],
-      "caveat": "Computed on every evaluation in AccrualFactBuilder and never fed: three keys in the allowlist, no new read."
+      "contracts.contract_version": [
+        "job_catalog_level"
+      ]
     }
   },
   "eligibility_gate": {
@@ -146,7 +174,8 @@
       },
       "associations": {},
       "source": "backend/components/api_core/app/resources/api_core/company.yml",
-      "description": "The company — the Factorial customer account (tenant). Every other record (employees, legal entities, expenses, …) belongs to exactly one company."
+      "description": "The company — the Factorial customer account (tenant). Every other record (employees, legal entities, expenses, …) belongs to exactly one company.",
+      "allowed_for_accrual": true
     },
     "attendance.edit_timesheet_request": {
       "fields": {
@@ -234,11 +263,13 @@
           "target": "attendance.shift",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The shift this request edits or deletes (null when the request creates a new shift)."
+          "description": "The shift this request edits or deletes (null when the request creates a new shift).",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/attendance/app/resources/attendance/edit_timesheet_requests.yml",
-      "description": "An edit timesheet request — an employee's request to create, edit or delete a shift on their timesheet, going through an approval flow. Approval routing branches on its tri-state `approved` status and its `request_type`."
+      "description": "An edit timesheet request — an employee's request to create, edit or delete a shift on their timesheet, going through an approval flow. Approval routing branches on its tri-state `approved` status and its `request_type`.",
+      "allowed_for_accrual": false
     },
     "attendance.employees_policy": {
       "fields": {
@@ -287,7 +318,8 @@
       },
       "associations": {},
       "source": "backend/components/attendance/app/resources/attendance/employees_policy.yml",
-      "description": "An attendance policy — a named configuration that groups employees under shared time-tracking settings (clock-in methods, overtime rules, tolerances, ...). One policy is the default applied to employees when they are first added to attendance."
+      "description": "An attendance policy — a named configuration that groups employees under shared time-tracking settings (clock-in methods, overtime rules, tolerances, ...). One policy is the default applied to employees when they are first added to attendance.",
+      "allowed_for_accrual": false
     },
     "attendance.employees_setting": {
       "fields": {
@@ -410,11 +442,13 @@
         "attendanceEmployeesPolicy": {
           "target": "attendance.employees_policy",
           "kind": "belongs_to",
-          "description": "The attendance policy this settings version belongs to."
+          "description": "The attendance policy this settings version belongs to.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/attendance/app/resources/attendance/employees_setting.yml",
-      "description": "A per-employee attendance settings version — the effective-dated configuration controlling how an employee tracks time, covering clock-in methods, geolocation/geofencing, breaks, overtime and timesheet-edit authorizations, tracking granularity and extra-hours rules. These are the policy flags time-tracking rules branch on."
+      "description": "A per-employee attendance settings version — the effective-dated configuration controlling how an employee tracks time, covering clock-in methods, geolocation/geofencing, breaks, overtime and timesheet-edit authorizations, tracking granularity and extra-hours rules. These are the policy flags time-tracking rules branch on.",
+      "allowed_for_accrual": false
     },
     "attendance.overtime_request": {
       "fields": {
@@ -481,7 +515,8 @@
       },
       "associations": {},
       "source": "backend/components/attendance/app/resources/attendance/overtime_request.yml",
-      "description": "An overtime request — an employee's request to have worked overtime recognised for a given day, going through an approval flow. The time-tracking parallel to a leave request; approval routing branches on its status and amount."
+      "description": "An overtime request — an employee's request to have worked overtime recognised for a given day, going through an approval flow. The time-tracking parallel to a leave request; approval routing branches on its status and amount.",
+      "allowed_for_accrual": false
     },
     "attendance.shift": {
       "fields": {
@@ -609,7 +644,8 @@
         }
       },
       "source": "backend/components/attendance/app/resources/attendance/shift.yml",
-      "description": "A shift — one worked-time interval for an employee (a clock-in and clock-out on a given day), the atomic record of tracked attendance. Time-tracking rules branch on its dates, hours, whether it is `workable`, and how it was clocked."
+      "description": "A shift — one worked-time interval for an employee (a clock-in and clock-out on a given day), the atomic record of tracked attendance. Time-tracking rules branch on its dates, hours, whether it is `workable`, and how it was clocked.",
+      "allowed_for_accrual": false
     },
     "companies.legal_entity": {
       "fields": {
@@ -652,7 +688,8 @@
       },
       "associations": {},
       "source": "backend/components/companies/app/resources/companies/legal_entity.yml",
-      "description": "A legal entity of the company — a registered business entity with its own country, currency and legal name. Employees are contracted under a legal entity and finance records are booked against one; a company typically has one legal entity per country it operates in."
+      "description": "A legal entity of the company — a registered business entity with its own country, currency and legal name. Employees are contracted under a legal entity and finance records are booked against one; a company typically has one legal entity per country it operates in.",
+      "allowed_for_accrual": true
     },
     "compensations.concept": {
       "fields": {
@@ -725,7 +762,8 @@
       },
       "associations": {},
       "source": "backend/components/compensations/app/resources/compensations/concept.yml",
-      "description": "A compensation concept — the type of pay item a compensation row is classified under (a fixed salary, a bonus, a deduction, ...), carrying its accounting category and unit. The thing compensation rules key on to decide how a row is treated."
+      "description": "A compensation concept — the type of pay item a compensation row is classified under (a fixed salary, a bonus, a deduction, ...), carrying its accounting category and unit. The thing compensation rules key on to decide how a row is treated.",
+      "allowed_for_accrual": false
     },
     "compensations.cycle": {
       "fields": {
@@ -785,7 +823,8 @@
       },
       "associations": {},
       "source": "backend/components/compensations/app/resources/compensations/cycles.yml",
-      "description": "A compensation cycle — a recurring payroll schedule (e.g. monthly) scoped to a country, currency and optional people group, that payroll runs are grouped under."
+      "description": "A compensation cycle — a recurring payroll schedule (e.g. monthly) scoped to a country, currency and optional people group, that payroll runs are grouped under.",
+      "allowed_for_accrual": false
     },
     "compensations.employees_compensation": {
       "fields": {
@@ -872,11 +911,13 @@
         "payroll_run": {
           "target": "compensations.payroll_run",
           "kind": "belongs_to",
-          "description": "The payroll run this compensation record belongs to."
+          "description": "The payroll run this compensation record belongs to.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/compensations/app/resources/compensations/employees_compensations.yml",
-      "description": "An employee compensation record represents a single concept's amount entry for one employee within a specific payroll run — the granular input produced by an amount strategy, optionally overridden by a reviewer. Multiple entries for the same employee and concept can exist (e.g. one per source). For the final, aggregated amount per concept plus the payroll results the bookkeeper calculated for that payroll run, use `compensations/payroll_run_employees_compensation` instead."
+      "description": "An employee compensation record represents a single concept's amount entry for one employee within a specific payroll run — the granular input produced by an amount strategy, optionally overridden by a reviewer. Multiple entries for the same employee and concept can exist (e.g. one per source). For the final, aggregated amount per concept plus the payroll results the bookkeeper calculated for that payroll run, use `compensations/payroll_run_employees_compensation` instead.",
+      "allowed_for_accrual": false
     },
     "compensations.payroll_run": {
       "fields": {
@@ -958,11 +999,13 @@
           "target": "compensations.cycle",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The compensation cycle this run belongs to (null for one-off runs)."
+          "description": "The compensation cycle this run belongs to (null for one-off runs).",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/compensations/app/resources/compensations/payroll_runs.yml",
-      "description": "A payroll run — the batch that compensates a set of employees for a period, moving through a lifecycle (open → completed) and lockable once finalised. Compensation rules and payroll conditions branch on its status, lock state and dates."
+      "description": "A payroll run — the batch that compensates a set of employees for a period, moving through a lifecycle (open → completed) and lockable once finalised. Compensation rules and payroll conditions branch on its status, lock state and dates.",
+      "allowed_for_accrual": false
     },
     "contracts.compensation": {
       "fields": {
@@ -1047,7 +1090,8 @@
       },
       "associations": {},
       "source": "backend/components/contracts/app/resources/contracts/compensation.yml",
-      "description": "A compensation line on a contract version — one pay element (salary, bonus, allowance, ...) with its amount, unit, recurrence and currency. What compensation rules read to evaluate an employee's contractual pay."
+      "description": "A compensation line on a contract version — one pay element (salary, bonus, allowance, ...) with its amount, unit, recurrence and currency. What compensation rules read to evaluate an employee's contractual pay.",
+      "allowed_for_accrual": false
     },
     "contracts.contract": {
       "fields": {
@@ -1135,7 +1179,8 @@
         }
       },
       "source": "backend/components/contracts/app/resources/contracts/contracts.yml",
-      "description": "An employment contract held by an employee — the container under which versioned contract terms (salary, hours, dates) live. It has a start/end date, a country and legal entity, and may be discontinuous (intermittent)."
+      "description": "An employment contract held by an employee — the container under which versioned contract terms (salary, hours, dates) live. It has a start/end date, a country and legal entity, and may be discontinuous (intermittent).",
+      "allowed_for_accrual": true
     },
     "contracts.contract_status": {
       "fields": {
@@ -1172,7 +1217,8 @@
         }
       },
       "source": "backend/components/contracts/app/resources/contracts/contract_status.yml",
-      "description": "The lifecycle status of a contract — whether it is currently active, and whether it can be paused or resumed. Keyed by (and sharing) the contract's id."
+      "description": "The lifecycle status of a contract — whether it is currently active, and whether it can be paused or resumed. Keyed by (and sharing) the contract's id.",
+      "allowed_for_accrual": true
     },
     "contracts.contract_version": {
       "fields": {
@@ -1282,13 +1328,15 @@
           "type": "T.nilable(Integer)",
           "nullable": true,
           "described": true,
-          "description": "the amount of money the employee earns in cents. When adding a salary to a contract that previously had none, both salary_amount and salary_frequency must be provided together."
+          "description": "the amount of money the employee earns in cents. When adding a salary to a contract that previously had none, both salary_amount and salary_frequency must be provided together.",
+          "withheld_from_accrual": true
         },
         "salary_frequency": {
           "type": "T.nilable(String)",
           "nullable": true,
           "described": true,
-          "description": "the frequency of the salary payment."
+          "description": "the frequency of the salary payment.",
+          "withheld_from_accrual": true
         },
         "starts_on": {
           "type": "T.nilable(Date)",
@@ -1354,11 +1402,14 @@
         "job_catalog_level": {
           "target": "job_catalog.level",
           "kind": "belongs_to",
-          "description": "The job catalog level (role + seniority) this contract version places the employee at."
+          "description": "The job catalog level (role + seniority) this contract version places the employee at.",
+          "hidden_from_accrual": true,
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/contracts/app/resources/contracts/contract_version.yml",
-      "description": "A contract version — a versioned, effective-dated snapshot of an employee's contract terms (salary, working hours, job title, leveling, trial period, dates). The current terms are the version flagged `is_reference`. The core record contract and compensation rules read."
+      "description": "A contract version — a versioned, effective-dated snapshot of an employee's contract terms (salary, working hours, job title, leveling, trial period, dates). The current terms are the version flagged `is_reference`. The core record contract and compensation rules read.",
+      "allowed_for_accrual": true
     },
     "contracts.termination_type": {
       "fields": {
@@ -1401,7 +1452,8 @@
       },
       "associations": {},
       "source": "backend/components/contracts/app/resources/contracts/termination_type.yml",
-      "description": "A termination type — a kind of employment termination chosen when offboarding an employee (e.g. voluntary resignation, dismissal), optionally scoped to a country."
+      "description": "A termination type — a kind of employment termination chosen when offboarding an employee (e.g. voluntary resignation, dismissal), optionally scoped to a country.",
+      "allowed_for_accrual": true
     },
     "cost_centers.assignment": {
       "fields": {
@@ -1459,11 +1511,13 @@
           "target": "cost_centers.cost_center",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The cost center this assignment allocates the resource to."
+          "description": "The cost center this assignment allocates the resource to.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/cost_centers/app/resources/cost_centers/assignment.yml",
-      "description": "A cost center assignment — one allocation row tying an assignable resource (e.g. an employee, identified by the `resource_type`/`resource_id` pair) to a cost center for a date range, at a given percentage. How much of a resource's cost is charged to a cost center over time is expressed as these rows."
+      "description": "A cost center assignment — one allocation row tying an assignable resource (e.g. an employee, identified by the `resource_type`/`resource_id` pair) to a cost center for a date range, at a given percentage. How much of a resource's cost is charged to a cost center over time is expressed as these rows.",
+      "allowed_for_accrual": false
     },
     "cost_centers.cost_center": {
       "fields": {
@@ -1520,7 +1574,8 @@
         "assignments": {
           "target": "cost_centers.assignment",
           "kind": "has_many",
-          "description": "The allocation rows tying resources (employees, …) to this cost center for a date range and percentage."
+          "description": "The allocation rows tying resources (employees, …) to this cost center for a date range and percentage.",
+          "target_not_allowed": true
         },
         "company": {
           "target": "api_core.company",
@@ -1535,7 +1590,8 @@
         }
       },
       "source": "backend/components/cost_centers/app/resources/cost_centers/cost_center.yml",
-      "description": "A cost center — an accounting bucket that spend (expenses, payroll, …) is charged to, scoped to a legal entity and identified by a code. Approval and policy rules branch on which cost center is being charged, on its status (spend against an inactive one is suspicious) or on the legal entity it belongs to."
+      "description": "A cost center — an accounting bucket that spend (expenses, payroll, …) is charged to, scoped to a legal entity and identified by a code. Approval and policy rules branch on which cost center is being charged, on its status (spend against an inactive one is suspicious) or on the legal entity it belongs to.",
+      "allowed_for_accrual": false
     },
     "employees.employee": {
       "fields": {
@@ -1637,7 +1693,8 @@
         "leaves": {
           "target": "timeoff.leave",
           "kind": "has_many",
-          "description": "The employee's time off leave requests (across all statuses). Use to branch on their absences — e.g. whether they have approved leave overlapping a date."
+          "description": "The employee's time off leave requests (across all statuses). Use to branch on their absences — e.g. whether they have approved leave overlapping a date.",
+          "hidden_from_accrual": true
         },
         "legalEntity": {
           "target": "companies.legal_entity",
@@ -1670,7 +1727,8 @@
         }
       },
       "source": "backend/components/employees/app/resources/employees/employee.yml",
-      "description": "An employee of the company — their identity, organisational placement (manager, teams, location, legal entity) and lifecycle (active, terminating, terminated). The central record the rest of the HR data hangs off."
+      "description": "An employee of the company — their identity, organisational placement (manager, teams, location, legal entity) and lifecycle (active, terminating, terminated). The central record the rest of the HR data hangs off.",
+      "allowed_for_accrual": true
     },
     "expenses.expensable": {
       "fields": {
@@ -1829,13 +1887,15 @@
           "target": "expenses.expensable_group",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The expense report (group of expensables submitted and reviewed together, e.g. a trip) this expensable belongs to, when it was submitted as part of one."
+          "description": "The expense report (group of expensables submitted and reviewed together, e.g. a trip) this expensable belongs to, when it was submitted as part of one.",
+          "target_not_allowed": true
         },
         "expense_detail": {
           "target": "expenses.expense",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The receipt-backed detail record (merchant, category, document). Present only when `type` is \"expense\"; null for mileage and per-diem expensables."
+          "description": "The receipt-backed detail record (merchant, category, document). Present only when `type` is \"expense\"; null for mileage and per-diem expensables.",
+          "target_not_allowed": true
         },
         "legal_entity": {
           "target": "companies.legal_entity",
@@ -1847,7 +1907,8 @@
           "target": "expenses.mileage",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The mileage claim detail record (distance, rate, route, round trip). Present only when `type` is \"mileage\"; null otherwise."
+          "description": "The mileage claim detail record (distance, rate, route, round trip). Present only when `type` is \"mileage\"; null otherwise.",
+          "target_not_allowed": true
         },
         "owner": {
           "target": "employees.employee",
@@ -1859,13 +1920,15 @@
           "target": "expenses.per_diem",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The per-diem (daily allowance) detail record (trip dates, origin/destination). Present only when `type` is \"perdiem\"; null otherwise."
+          "description": "The per-diem (daily allowance) detail record (trip dates, origin/destination). Present only when `type` is \"perdiem\"; null otherwise.",
+          "target_not_allowed": true
         },
         "project": {
           "target": "project_management.project",
           "optional": true,
           "kind": "belongs_to",
-          "description": "The project this expensable is charged to, when the spender linked one (e.g. to decide whether the cost is client-billable)."
+          "description": "The project this expensable is charged to, when the spender linked one (e.g. to decide whether the cost is client-billable).",
+          "target_not_allowed": true
         },
         "reporter": {
           "target": "employees.employee",
@@ -1875,7 +1938,8 @@
         }
       },
       "source": "backend/components/expenses/app/resources/expenses/expensable.yml",
-      "description": "Represents an expensable resource — the header record every employee expense submission goes through, regardless of kind. It can be a regular (receipt-backed) expense, a mileage claim, or a per-diem allowance; the `type` field discriminates, and the matching detail record carries the kind-specific data."
+      "description": "Represents an expensable resource — the header record every employee expense submission goes through, regardless of kind. It can be a regular (receipt-backed) expense, a mileage claim, or a per-diem allowance; the `type` field discriminates, and the matching detail record carries the kind-specific data.",
+      "allowed_for_accrual": false
     },
     "expenses.expensable_group": {
       "fields": {
@@ -1949,7 +2013,8 @@
         }
       },
       "source": "backend/components/expenses/app/resources/expenses/expensable_group.yml",
-      "description": "An expense report — a group of expensables submitted and reviewed together as a single unit (typically all the expenses of one trip, event or period), owned by one employee."
+      "description": "An expense report — a group of expensables submitted and reviewed together as a single unit (typically all the expenses of one trip, event or period), owned by one employee.",
+      "allowed_for_accrual": false
     },
     "expenses.expense": {
       "fields": {
@@ -2052,7 +2117,8 @@
       },
       "associations": {},
       "source": "backend/components/expenses/app/resources/expenses/expense.yml",
-      "description": "A regular (receipt-backed) expense — the detail record behind an expensable of type \"expense\", carrying the purchase data — merchant, category, amount and the supporting document."
+      "description": "A regular (receipt-backed) expense — the detail record behind an expensable of type \"expense\", carrying the purchase data — merchant, category, amount and the supporting document.",
+      "allowed_for_accrual": false
     },
     "expenses.mileage": {
       "fields": {
@@ -2161,7 +2227,8 @@
       },
       "associations": {},
       "source": "backend/components/expenses/app/resources/expenses/mileage.yml",
-      "description": "A mileage claim — the detail record behind an expensable of type \"mileage\", reimbursing distance driven on company business (route, distance, rate per unit)."
+      "description": "A mileage claim — the detail record behind an expensable of type \"mileage\", reimbursing distance driven on company business (route, distance, rate per unit).",
+      "allowed_for_accrual": false
     },
     "expenses.per_diem": {
       "fields": {
@@ -2264,7 +2331,8 @@
       },
       "associations": {},
       "source": "backend/components/expenses/app/resources/expenses/per_diem.yml",
-      "description": "A per-diem allowance — the detail record behind an expensable of type \"perdiem\", covering a fixed daily allowance for the days of a business trip instead of itemised receipts."
+      "description": "A per-diem allowance — the detail record behind an expensable of type \"perdiem\", covering a fixed daily allowance for the days of a business trip instead of itemised receipts.",
+      "allowed_for_accrual": false
     },
     "finance.financial_document": {
       "fields": {
@@ -2406,11 +2474,13 @@
           "target": "finance.financial_document_association",
           "optional": true,
           "kind": "has_many",
-          "description": "Every resource this document is linked to, one row per link, discriminated by `resource_type` (purchaseorder, project, subproject, expense, softwaresetup, quote). Use it to tell what an invoice belongs to."
+          "description": "Every resource this document is linked to, one row per link, discriminated by `resource_type` (purchaseorder, project, subproject, expense, softwaresetup, quote). Use it to tell what an invoice belongs to.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/finance/app/resources/finance/financial_document.yml",
-      "description": "Financial Document is a document that represents a financial transaction. Could be an invoice, a credit note or receipt."
+      "description": "Financial Document is a document that represents a financial transaction. Could be an invoice, a credit note or receipt.",
+      "allowed_for_accrual": false
     },
     "finance.financial_document_association": {
       "fields": {
@@ -2441,7 +2511,8 @@
       },
       "associations": {},
       "source": "backend/components/finance/app/resources/finance/financial_document_association.yml",
-      "description": "One link between a financial document and something it belongs to: a purchase order, project, subproject, expense, software setup or quote. A document can carry several links, including several of the same type (an invoice covering two purchase orders has two rows here)."
+      "description": "One link between a financial document and something it belongs to: a purchase order, project, subproject, expense, software setup or quote. A document can carry several links, including several of the same type (an invoice covering two purchase orders has two rows here).",
+      "allowed_for_accrual": false
     },
     "holidays.company_holiday": {
       "fields": {
@@ -2489,7 +2560,8 @@
         }
       },
       "source": "backend/components/holidays/app/resources/holidays/company_holiday.yml",
-      "description": "Company holidays"
+      "description": "Company holidays",
+      "allowed_for_accrual": false
     },
     "job_catalog.level": {
       "fields": {
@@ -2540,16 +2612,19 @@
         "role": {
           "target": "job_catalog.role",
           "kind": "belongs_to",
-          "description": "The role this level belongs to."
+          "description": "The role this level belongs to.",
+          "target_not_allowed": true
         },
         "salary_ranges": {
           "target": "job_catalog.salary_range",
           "kind": "has_many",
-          "description": "The compensation bands defined for this level."
+          "description": "The compensation bands defined for this level.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/job_catalog/app/resources/job_catalog/levels.yml",
-      "description": "A job catalog level — a seniority step within a role (e.g. Junior, Senior), ordered, with its own salary ranges. What leveling rules and compensation bands key on."
+      "description": "A job catalog level — a seniority step within a role (e.g. Junior, Senior), ordered, with its own salary ranges. What leveling rules and compensation bands key on.",
+      "allowed_for_accrual": false
     },
     "job_catalog.role": {
       "fields": {
@@ -2606,11 +2681,13 @@
         "levels": {
           "target": "job_catalog.level",
           "kind": "has_many",
-          "description": "The seniority levels this role can be performed at."
+          "description": "The seniority levels this role can be performed at.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/job_catalog/app/resources/job_catalog/roles.yml",
-      "description": "A job catalog role — a named job (e.g. CFO, Software Engineer) in the company's job architecture, holding the seniority levels it can be performed at and the legal entities it applies to."
+      "description": "A job catalog role — a named job (e.g. CFO, Software Engineer) in the company's job architecture, holding the seniority levels it can be performed at and the legal entities it applies to.",
+      "allowed_for_accrual": false
     },
     "job_catalog.salary_range": {
       "fields": {
@@ -2667,11 +2744,13 @@
         "level": {
           "target": "job_catalog.level",
           "kind": "belongs_to",
-          "description": "The level this salary range applies to."
+          "description": "The level this salary range applies to.",
+          "target_not_allowed": true
         }
       },
       "source": "backend/components/job_catalog/app/resources/job_catalog/salary_range.yml",
-      "description": "A job catalog salary range — the compensation band (min/max) defined for a level, per currency and legal entity. What pay-equity and compensation rules compare an employee's pay against."
+      "description": "A job catalog salary range — the compensation band (min/max) defined for a level, per currency and legal entity. What pay-equity and compensation rules compare an employee's pay against.",
+      "allowed_for_accrual": false
     },
     "locations.location": {
       "fields": {
@@ -2732,7 +2811,8 @@
       },
       "associations": {},
       "source": "backend/components/locations/app/resources/locations/location.yml",
-      "description": "A workplace (office location) of the company — its name, jurisdiction (country, timezone) and address. Every employee has a default workplace, so it is the org-placement dimension that policy and approval rules use to branch on where someone works (e.g. country-specific thresholds, HQ vs satellite handling)."
+      "description": "A workplace (office location) of the company — its name, jurisdiction (country, timezone) and address. Every employee has a default workplace, so it is the org-placement dimension that policy and approval rules use to branch on where someone works (e.g. country-specific thresholds, HQ vs satellite handling).",
+      "allowed_for_accrual": true
     },
     "project_management.project": {
       "fields": {
@@ -2811,7 +2891,8 @@
         }
       },
       "source": "backend/components/project_management/app/resources/project_management/projects.yml",
-      "description": "A project of the company — a named initiative (internal or for a client) that time and costs are tracked against. Expenses, time records and budgets can be charged to a project; billable projects recharge those costs to a client."
+      "description": "A project of the company — a named initiative (internal or for a client) that time and costs are tracked against. Expenses, time records and budgets can be charged to a project; billable projects recharge those costs to a client.",
+      "allowed_for_accrual": false
     },
     "teams.membership": {
       "fields": {
@@ -2860,7 +2941,8 @@
         }
       },
       "source": "backend/components/teams/app/resources/teams/membership.yml",
-      "description": "A team membership — the join record placing one employee on one team, with a `lead` flag marking whether they lead that team. The row policy and approval rules read to know who belongs to which team and who its leads are."
+      "description": "A team membership — the join record placing one employee on one team, with a `lead` flag marking whether they lead that team. The row policy and approval rules read to know who belongs to which team and who its leads are.",
+      "allowed_for_accrual": true
     },
     "teams.team": {
       "fields": {
@@ -2915,7 +2997,8 @@
         }
       },
       "source": "backend/components/teams/app/resources/teams/team.yml",
-      "description": "A team in the company's org chart — a named group employees belong to (through memberships), optionally with one or more leads and nested under a parent team. It is the grouping dimension policy and approval rules use to route by team or to treat team leads specially."
+      "description": "A team in the company's org chart — a named group employees belong to (through memberships), optionally with one or more leads and nested under a parent team. It is the grouping dimension policy and approval rules use to route by team or to treat team leads specially.",
+      "allowed_for_accrual": true
     },
     "timeoff.allowance": {
       "fields": {
@@ -3006,7 +3089,8 @@
       },
       "associations": {},
       "source": "backend/components/timeoff/app/resources/timeoff/allowance.yml",
-      "description": "An Allowance represents how a Time off counter accrues and deducts days."
+      "description": "An Allowance represents how a Time off counter accrues and deducts days.",
+      "allowed_for_accrual": true
     },
     "timeoff.leave": {
       "fields": {
@@ -3144,7 +3228,8 @@
         }
       },
       "source": "backend/components/timeoff/app/resources/timeoff/leave.yml",
-      "description": "A time off leave — one employee's request to be absent for a date range (or part of a day) under a given leave type. It is the central object of the time off domain; approval routing and leave conditions branch on its dates, its type and its tri-state `approved` status (null = pending, true = approved, false = rejected)."
+      "description": "A time off leave — one employee's request to be absent for a date range (or part of a day) under a given leave type. It is the central object of the time off domain; approval routing and leave conditions branch on its dates, its type and its tri-state `approved` status (null = pending, true = approved, false = rejected).",
+      "allowed_for_accrual": true
     },
     "timeoff.leave_type": {
       "fields": {
@@ -3283,7 +3368,8 @@
         }
       },
       "source": "backend/components/timeoff/app/resources/timeoff/leave_type.yml",
-      "description": "A time off leave type — the configurable kind of leave an employee can request (holiday, sick leave, parental leave, ...). It carries the rules that govern requests of that kind, the flags rules branch on (whether it needs `approval_required`, whether it `accrues` a balance, is `workable`/`payable`, visible, restricted) and the allowances it draws from."
+      "description": "A time off leave type — the configurable kind of leave an employee can request (holiday, sick leave, parental leave, ...). It carries the rules that govern requests of that kind, the flags rules branch on (whether it needs `approval_required`, whether it `accrues` a balance, is `workable`/`payable`, visible, restricted) and the allowances it draws from.",
+      "allowed_for_accrual": true
     },
     "timeoff.policy": {
       "fields": {
@@ -3349,7 +3435,8 @@
         }
       },
       "source": "backend/components/timeoff/app/resources/timeoff/policy.yml",
-      "description": "A time off policy — a named configuration that groups a set of allowances and governs the leaves of the employees assigned to it. A company has one main policy that employees fall under by default, plus optional policies for specific populations (e.g. remote employees)."
+      "description": "A time off policy — a named configuration that groups a set of allowances and governs the leaves of the employees assigned to it. A company has one main policy that employees fall under by default, plus optional policies for specific populations (e.g. remote employees).",
+      "allowed_for_accrual": true
     },
     "timeoff.policy_assignment": {
       "fields": {
@@ -3409,43 +3496,8 @@
         }
       },
       "source": "backend/components/timeoff/app/resources/timeoff/policy_assignment.yml",
-      "description": "A time off policy assignment — the record linking an employee to the time off policy that governs their leaves and allowances, effective from a given date. An employee's policy can change over time, so each assignment captures one such period; together they answer \"which policy applied to this employee, when\"."
-    },
-    "timeoff.allowance_tenure_period": {
-      "fields": {
-        "id": {
-          "type": "T.nilable(Integer)",
-          "nullable": true,
-          "described": false
-        },
-        "timeoff_allowance_id": {
-          "type": "T.nilable(Integer)",
-          "nullable": true,
-          "described": false
-        },
-        "period_type": {
-          "type": "T.nilable(String)",
-          "nullable": true,
-          "described": false
-        },
-        "period_length": {
-          "type": "T.nilable(Integer)",
-          "nullable": true,
-          "described": false
-        },
-        "max_cap_in_cents": {
-          "type": "T.nilable(Integer)",
-          "nullable": true,
-          "described": false
-        },
-        "balance_type": {
-          "type": "T.nilable(String)",
-          "nullable": true,
-          "described": false
-        }
-      },
-      "associations": {},
-      "registered_by": "pr_112685"
+      "description": "A time off policy assignment — the record linking an employee to the time off policy that governs their leaves and allowances, effective from a given date. An employee's policy can change over time, so each assignment captures one such period; together they answer \"which policy applied to this employee, when\".",
+      "allowed_for_accrual": true
     }
   }
 }

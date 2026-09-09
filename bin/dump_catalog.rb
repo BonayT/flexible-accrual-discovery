@@ -64,18 +64,40 @@ def verify_inputs!
   abort "RUNTIME_INPUTS no longer match #{path} (renamed?): #{missing.join(', ')}"
 end
 
-# Registered by #112685 and not yet on main, so the snapshot cannot carry it.
-PR_112685_ENTITY = {
-  'timeoff.allowance_tenure_period' => {
-    'fields' => {
-      'id' => 'T.nilable(Integer)',
-      'timeoff_allowance_id' => 'T.nilable(Integer)',
-      'period_type' => 'T.nilable(String)',
-      'period_length' => 'T.nilable(Integer)',
-      'max_cap_in_cents' => 'T.nilable(Integer)',
-      'balance_type' => 'T.nilable(String)'
-    },
-    'associations' => []
+# The accrual view of the registry, from `Timeoff::Factor::AllowedFactorEntities`
+# on the branch of #113385. Reachability is not the registry's: this view narrows
+# it three ways, and the simulator narrows it the same way or it would offer an
+# author fields the save would refuse.
+ACCRUAL_VIEW = {
+  'roots' => {
+    'allowance' => 'timeoff.allowance',
+    'employee' => 'employees.employee',
+    'contract' => 'contracts.contract_version'
+  },
+  # Only these may be landed on, however the graph leads there.
+  'identifiers' => %w[
+    api_core.company
+    companies.legal_entity
+    contracts.contract
+    contracts.contract_status
+    contracts.contract_version
+    contracts.termination_type
+    employees.employee
+    locations.location
+    teams.membership
+    teams.team
+    timeoff.allowance
+    timeoff.leave
+    timeoff.leave_type
+    timeoff.policy
+    timeoff.policy_assignment
+  ].freeze,
+  # Registered, and deliberately withheld from the accrual author.
+  'withheld_fields' => { 'contracts.contract_version' => %w[salary_amount salary_frequency] },
+  # Registered and allowed as entities, but not navigable from these parents.
+  'hidden_associations' => {
+    'employees.employee' => %w[leaves],
+    'contracts.contract_version' => %w[job_catalog_level]
   }
 }.freeze
 
@@ -85,28 +107,25 @@ BINDINGS = {
     'entities' => { 'allowance' => 'timeoff.allowance' },
     'scalars' => RUNTIME_INPUTS.reject { |_, v| v['kind'] == 'entity' }.keys
   },
-  'pr_112683' => {
-    'label' => 'With #112683 — the contract',
-    'entities' => { 'contract' => 'contracts.contract_version' },
+  'pr_113385' => {
+    'label' => 'With #113385 — the employee and the contract',
+    'entities' => { 'employee' => 'employees.employee', 'contract' => 'contracts.contract_version' },
     'scalars' => [],
-    'caveat' => 'The bound row is the REFERENCE contract, resolved today ' \
-                '(Contracts::Repositories::ReferenceContracts), not the version in force ' \
-                'during the cycle being computed. A mid-cycle change reads as its end state, ' \
-                'and a recomputed past cycle reads as today.'
+    'caveat' =>
+      "The contract bound is the version in force on the cycle's reference date, resolved in " \
+        'Ruby by CycleContractVersion: CEL cannot pick a version out of the history, and ' \
+        "is_reference is today's contract rather than the cycle's. One row per evaluation, so a " \
+        'cycle containing two different contracts still cannot be split.'
   },
-  'pr_112685' => {
-    'label' => 'With #112685 — the seniority rung',
-    'entities' => { 'tenure' => 'timeoff.allowance_tenure_period' },
-    'scalars' => [],
-    'caveat' => 'The rung answers WHICH tier applies, never its amount: adjustment_in_cents ' \
-                'is deliberately off the allowlist, so the bonus stays on its guarded path.'
-  },
-  'discarded_facts' => {
-    'label' => 'The three facts already computed and discarded',
+  'pr_113386' => {
+    'label' => 'With #113386 — the rich catalog',
     'entities' => {},
-    'scalars' => %w[tenure_years_at_period_start tenure_months_at_period_start absences_in_period],
-    'caveat' => 'Computed on every evaluation in AccrualFactBuilder and never fed: three keys ' \
-                'in the allowlist, no new read.'
+    'scalars' => [],
+    'describes_only' => true,
+    'caveat' =>
+      'Changes nothing about what a rule can reach: it changes what the author is told about ' \
+        'it. Without it the schema lists bare field names, so One knows allowance.rounding ' \
+        'exists but not that its values are decimals, half_day, quarters and round_up.'
   }
 }.freeze
 
@@ -223,20 +242,30 @@ end
 
 verify_inputs!
 
-PR_112685_ENTITY.each do |identifier, entry|
-  doc, source = resource_doc(identifier)
-  properties = doc ? properties_for(doc) : {}
-  fields = entry['fields'].to_h { |name, type| [name, field_entry(name, type, properties)] }
-  built = { 'fields' => fields, 'associations' => {}, 'registered_by' => 'pr_112685' }
-  built['source'] = source if source
-  entities[identifier] = built
+# Narrow every entity to the accrual view, and say so rather than dropping things
+# silently: a field withheld from the author is a decision worth reading, and so is
+# an association that exists and is not navigable from here.
+entities.each do |identifier, entry|
+  ACCRUAL_VIEW.fetch('withheld_fields').fetch(identifier, []).each do |field|
+    entry['fields'][field]['withheld_from_accrual'] = true if entry['fields'].key?(field)
+  end
+
+  hidden = ACCRUAL_VIEW.fetch('hidden_associations').fetch(identifier, [])
+  entry['associations'].each do |name, association|
+    association['hidden_from_accrual'] = true if hidden.include?(name)
+    association['target_not_allowed'] = true unless ACCRUAL_VIEW.fetch('identifiers').include?(association['target'])
+  end
+
+  entry['allowed_for_accrual'] = ACCRUAL_VIEW.fetch('identifiers').include?(identifier)
 end
 
 puts JSON.pretty_generate(
-  'generated_from' => 'backend/components/factor/registry_snapshot.yml + app/resources/**/*.yml',
+  'generated_from' => 'registry_snapshot.yml + app/resources/**/*.yml, narrowed by ' \
+                      'Timeoff::Factor::AllowedFactorEntities (#113385)',
   'entity_count' => entities.size,
   'runtime_inputs' => RUNTIME_INPUTS,
   'bindings' => BINDINGS,
+  'accrual_view' => ACCRUAL_VIEW,
   'eligibility_gate' => ELIGIBILITY_GATE,
   'landing_gaps' => LANDING_GAPS,
   'entities' => entities
